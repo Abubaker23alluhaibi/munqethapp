@@ -1,0 +1,16 @@
+{
+  "name": "munqeth-root",
+  "version": "1.0.0",
+  "description": "Munqeth App - Root package for Railway deployment",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "build": "cd backend && npm install",
+    "install": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
+
