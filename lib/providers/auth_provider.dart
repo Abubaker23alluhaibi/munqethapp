@@ -253,9 +253,15 @@ class AuthProvider with ChangeNotifier {
       // محاولة تحميل Driver
       if (await _driverService.isLoggedIn()) {
         _driver = await _driverService.getCurrentDriver();
-        // إرسال FCM token تلقائياً للسائق المسجل دخول
+        // إرسال FCM token تلقائياً للسائق المسجل دخول (مع تأخير أطول)
         if (_driver != null) {
+          AppLogger.i('🔄 Driver logged in, will send FCM token in 5 seconds...');
+          // إرسال فوري + إعادة محاولة بعد 10 ثوانٍ
           _sendFcmTokenToServer(driverId: _driver!.driverId);
+          Future.delayed(const Duration(seconds: 10), () {
+            final notificationService = NotificationService();
+            notificationService.retrySendingFcmToken(driverId: _driver!.driverId);
+          });
         }
       }
 
@@ -269,10 +275,16 @@ class AuthProvider with ChangeNotifier {
       _isUserLoggedIn = userLoggedIn ?? false;
       if (_isUserLoggedIn) {
         await loadCurrentUser();
-        // إرسال FCM token تلقائياً للمستخدم المسجل دخول
+        // إرسال FCM token تلقائياً للمستخدم المسجل دخول (مع تأخير أطول)
         if (_currentUser != null) {
           final phone = await SecureStorageService.getString('user_phone');
+          AppLogger.i('🔄 User logged in, will send FCM token in 5 seconds...');
+          // إرسال فوري + إعادة محاولة بعد 10 ثوانٍ
           _sendFcmTokenToServer(userId: _currentUser!.id, phone: phone);
+          Future.delayed(const Duration(seconds: 10), () {
+            final notificationService = NotificationService();
+            notificationService.retrySendingFcmToken(userId: _currentUser!.id, phone: phone);
+          });
         }
       }
 
@@ -315,8 +327,8 @@ class AuthProvider with ChangeNotifier {
     AppLogger.i('🔄 _sendFcmTokenToServer called - userId: $userId, phone: $phone, driverId: $driverId');
     
     // إرسال FCM token بشكل غير متزامن (لا ننتظر النتيجة)
-    // إعادة المحاولة بعد تأخير قصير للتأكد من أن FCM token جاهز
-    Future.delayed(const Duration(milliseconds: 500), () async {
+    // زيادة وقت الانتظار للتأكد من أن FCM token جاهز
+    Future.delayed(const Duration(seconds: 5), () async {
       AppLogger.d('⏰ Starting FCM token send after delay...');
       
       try {
@@ -332,29 +344,39 @@ class AuthProvider with ChangeNotifier {
           AppLogger.d('✅ NotificationService initialized');
         }
         
-        // التحقق من FCM token مرة أخرى
-        if (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty) {
-          AppLogger.e('❌ FCM token is still null or empty after initialization');
-          AppLogger.e('   Attempting to get FCM token again...');
+        // التحقق من FCM token - محاولة متعددة
+        int tokenRetries = 5;
+        while (tokenRetries > 0 && (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty)) {
+          AppLogger.w('⚠️ FCM token is null, retrying... ($tokenRetries retries left)');
           
-          // محاولة الحصول على token مرة أخرى
+          // إعادة تهيئة NotificationService
+          if (!notificationService.isInitialized) {
+            AppLogger.d('   Re-initializing NotificationService...');
+            await notificationService.initialize();
+            await Future.delayed(const Duration(seconds: 1));
+          }
+          
+          // محاولة الحصول على token
           try {
             final token = await notificationService.firebaseMessaging.getToken();
             if (token != null && token.isNotEmpty) {
-              AppLogger.i('✅ Got FCM token on retry: ${token.substring(0, 30)}...');
-              // تحديث token في NotificationService
+              AppLogger.i('✅ Got FCM token: ${token.substring(0, 30)}...');
               await SecureStorageService.setString('fcm_token', token);
-              // إعادة محاولة إرسال token
-              final retrySuccess = await notificationService.sendFcmTokenToServer(userId, phone, driverId: driverId);
-              if (retrySuccess) {
-                AppLogger.i('✅ FCM token sent successfully after retry');
-                return;
-              }
+              break;
             }
           } catch (retryError) {
-            AppLogger.e('❌ Failed to get FCM token on retry', retryError);
+            AppLogger.w('   Failed to get FCM token: $retryError');
           }
           
+          tokenRetries--;
+          if (tokenRetries > 0) {
+            await Future.delayed(const Duration(seconds: 2));
+          }
+        }
+        
+        // التحقق النهائي
+        if (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty) {
+          AppLogger.e('❌ FCM token is still null after all retries');
           AppLogger.e('   This means Firebase is not properly configured or permissions are not granted');
           AppLogger.e('   Please check:');
           AppLogger.e('   1. google-services.json is in android/app/');

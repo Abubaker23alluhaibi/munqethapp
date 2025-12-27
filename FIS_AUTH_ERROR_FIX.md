@@ -1,118 +1,118 @@
-# 🔴 حل مشكلة FIS_AUTH_ERROR
+# 🔧 حل مشكلة FIS_AUTH_ERROR
 
 ## المشكلة
 ```
-E/FirebaseMessaging: Failed to get FIS auth token
-E/FirebaseMessaging: java.util.concurrent.ExecutionException: 
-com.google.firebase.installations.FirebaseInstallationsException: 
-Firebase Installations Service is unavailable. Please try again later.
+FIS_AUTH_ERROR - Firebase Installations Service is unavailable
 ```
 
-## السبب
-`FIS_AUTH_ERROR` يعني أن Firebase Installations Service لا يمكنه المصادقة. هذا يحدث عادة عندما:
+هذا يعني أن Firebase لا يمكنه التحقق من هوية التطبيق.
 
-1. **SHA fingerprints غير موجودة أو غير صحيحة** في Firebase Console
-2. **google-services.json غير صحيح** أو غير موجود
-3. **Package name mismatch** - package name في Firebase Console لا يطابق التطبيق
-4. **Firebase project configuration غير صحيح**
+## ✅ التحقق من Firebase Console
 
-## الحل
+تم التأكد من أن SHA fingerprints موجودة وصحيحة:
+- ✅ SHA-1: `fd:94:93:92:a4:3b:77:7a:66:cf:6b:2a:31:cd:1b:63:27:8a:82:cd`
+- ✅ SHA-256: `da:79:d0:59:45:c0:2a:3c:dc:58:dd:42:49:4e:ef:ec:86:65:9e:cd:67:fa:1a:35:e6:23:82:d4:79:99:3a:80`
+- ✅ Package name: `com.munqeth.app`
 
-### الخطوة 1: التحقق من SHA Fingerprints في Firebase Console
+## 🔍 الأسباب المحتملة
 
-1. اذهب إلى [Firebase Console](https://console.firebase.google.com)
-2. اختر مشروعك: **munqethnof**
-3. Project Settings → Your apps → Android app (com.munqeth.app)
-4. تحقق من **SHA certificate fingerprints**:
-   - ✅ SHA-1: `fd:94:93:92:a4:3b:77:7a:66:cf:6b:2a:31:cd:1b:63:27:8a:82:cd`
-   - ✅ SHA-256: `da:79:d0:59:45:c0:2a:3c:dc:58:dd:42:49:4e:ef:ec:86:65:9e:cd:67:fa:1a:35:e6:23:82:d4:79:99:3a:80`
+### 1. Debug vs Release Keystore Mismatch
+**المشكلة:** التطبيق مبني بـ Debug keystore لكن SHA المضاف في Firebase هو للـ Release keystore (أو العكس).
 
-**إذا كانت غير موجودة:**
-- أضفها من Firebase Console
-- حمّل `google-services.json` جديد
-- استبدل الملف في `android/app/google-services.json`
+**الحل:**
+1. **إذا كنت تبني Debug build:**
+   ```powershell
+   cd munqeth\android
+   .\get_sha_fingerprints.ps1
+   ```
+   - احصل على SHA-1 للـ Debug keystore
+   - أضفه في Firebase Console
 
-### الخطوة 2: التحقق من google-services.json
+2. **إذا كنت تبني Release build:**
+   - تأكد من استخدام `munqeth.keystore`
+   - SHA المضاف صحيح: `fd:94:93:92:a4:3b:77:7a:66:cf:6b:2a:31:cd:1b:63:27:8a:82:cd`
 
-```bash
-# تحقق من وجود الملف
-cat android/app/google-services.json | grep project_id
+### 2. google-services.json يحتاج تحديث
+**المشكلة:** بعد إضافة SHA fingerprints، قد يحتاج `google-services.json` تحديث.
 
-# يجب أن ترى:
-# "project_id": "munqethnof"
-```
-
-**إذا كان الملف غير موجود أو غير صحيح:**
-1. اذهب إلى Firebase Console
-2. Project Settings → Your apps → Android app
-3. اضغط على **"Download google-services.json"**
+**الحل:**
+1. اذهب إلى Firebase Console → Project Settings → Your apps
+2. اضغط على تطبيق Android
+3. اضغط **"Download google-services.json"**
 4. استبدل الملف في `android/app/google-services.json`
+5. أعد بناء التطبيق
 
-### الخطوة 3: التحقق من Package Name
+### 3. مشكلة في الاتصال بالإنترنت
+**المشكلة:** Firebase لا يستطيع الاتصال بالسيرفرات.
 
-تأكد من أن package name مطابق في جميع الأماكن:
+**الحل:**
+- تحقق من الاتصال بالإنترنت
+- جرب على شبكة Wi-Fi بدلاً من البيانات
+- تحقق من Firewall أو VPN
 
-- ✅ Firebase Console: `com.munqeth.app`
-- ✅ `android/app/build.gradle`: `applicationId "com.munqeth.app"`
-- ✅ `google-services.json`: `"package_name": "com.munqeth.app"`
+## 🔧 الحل السريع
 
-### الخطوة 4: تنظيف وإعادة بناء التطبيق
+### الخطوة 1: أضف SHA-1 للـ Debug Keystore (للاختبار)
 
-```bash
-# تنظيف كامل
+```powershell
+cd munqeth\android
+.\get_sha_fingerprints.ps1
+```
+
+انسخ SHA-1 للـ Debug keystore وأضفه في Firebase Console.
+
+### الخطوة 2: حمل google-services.json الجديد
+
+1. Firebase Console → Project Settings → Your apps → Android app
+2. **"Download google-services.json"**
+3. استبدل الملف في `android/app/google-services.json`
+
+### الخطوة 3: نظف وأعد البناء
+
+```powershell
+cd C:\Users\abubkr\Desktop\monqethAll\munqeth
+$env:PATH += ";C:\src\flutter\bin"
 flutter clean
-cd android
-./gradlew clean
-cd ..
-
-# إعادة الحصول على dependencies
 flutter pub get
-
-# بناء APK جديد
-flutter build apk --release
+flutter run
 ```
 
-### الخطوة 5: إعادة تثبيت التطبيق
+## 💡 حل بديل: استخدام FCM Token محفوظ
 
-```bash
-# إلغاء تثبيت التطبيق القديم
-adb uninstall com.munqeth.app
+إذا استمرت المشكلة، الكود الآن يستخدم FCM token محفوظ في Storage:
+- إذا فشل الحصول على token جديد، سيستخدم المحفوظ
+- هذا يسمح للإشعارات بالعمل حتى لو كان هناك مشكلة في Firebase configuration
 
-# تثبيت APK الجديد
-adb install build/app/outputs/flutter-apk/app-release.apk
-```
+## 🧪 اختبار
 
-## التحقق من الحل
+بعد إصلاح المشكلة:
 
-بعد تطبيق الحلول، ابحث في logs عن:
+1. **احذف التطبيق من الجهاز** (إن كان مثبتاً)
+2. **ثبت APK جديد**
+3. **سجل دخول**
+4. **تحقق من Logs:**
+   ```
+   ✅ FCM token sent successfully
+   ```
 
-```
-✅ Firebase initialized successfully
-✅ FCM token obtained: ...
-✅ FCM Token saved successfully: ...
-```
+## 📋 قائمة التحقق
 
-**إذا استمر الخطأ:**
-1. تحقق من SHA fingerprints مرة أخرى
-2. تأكد من أن `google-services.json` صحيح
-3. تحقق من package name
-4. جرب إعادة بناء التطبيق بالكامل
+- [ ] SHA-1 للـ Debug keystore مضاف في Firebase (للاختبار)
+- [ ] SHA-1 للـ Release keystore مضاف في Firebase (للإنتاج)
+- [ ] SHA-256 مضاف في Firebase
+- [ ] `google-services.json` محدث بعد إضافة SHA
+- [ ] Package name مطابق في جميع الأماكن: `com.munqeth.app`
+- [ ] التطبيق مبني بنفس Keystore الذي أضفنا له SHA
+- [ ] الاتصال بالإنترنت يعمل
+- [ ] تم حذف التطبيق القديم قبل تثبيت الجديد
 
-## ملاحظات مهمة
+## ⚠️ ملاحظة مهمة
 
-1. **Debug vs Release:**
-   - Debug builds تستخدم debug keystore
-   - Release builds تستخدم release keystore (`munqeth.keystore`)
-   - **يجب إضافة SHA fingerprints لكلا الـ keystores**
+**للإنتاج (Release Build):**
+- استخدم `munqeth.keystore` فقط
+- تأكد من أن SHA المضاف في Firebase هو للـ Release keystore
+- لا تستخدم Debug keystore في الإنتاج
 
-2. **Google Play App Signing:**
-   - إذا كنت تستخدم Google Play App Signing، قد تحتاج إلى إضافة SHA-256 من Google Play Console أيضاً
-
-3. **Network Connectivity:**
-   - تأكد من أن الجهاز متصل بالإنترنت
-   - Firebase يحتاج إلى اتصال بالإنترنت للحصول على FCM token
-
----
-
-**✅ بعد إصلاح SHA fingerprints و google-services.json، يجب أن يعمل FCM token بشكل صحيح!**
-
+**للاختبار (Debug Build):**
+- يمكنك إضافة SHA للـ Debug keystore أيضاً لتسهيل الاختبار
+- أو استخدم Release build للاختبار أيضاً

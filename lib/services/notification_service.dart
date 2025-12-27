@@ -253,8 +253,10 @@ class NotificationService {
         if (savedToken != null && savedToken.isNotEmpty) {
           _fcmToken = savedToken;
           AppLogger.w('⚠️ Using saved FCM token from storage (may be expired)');
+          AppLogger.i('💡 This token will be sent to server - if it works, notifications will function');
         } else {
           AppLogger.e('❌ No saved FCM token found - notifications will not work');
+          AppLogger.e('   Please fix Firebase configuration (SHA fingerprints) to get new token');
         }
       }
 
@@ -399,64 +401,126 @@ class NotificationService {
   Future<String?> refreshFcmToken() async {
     try {
       AppLogger.d('🔄 Refreshing FCM token...');
+      
+      // محاولة الحصول على token جديد
       await _getFCMToken();
+      
+      // إذا فشل، استخدم المحفوظ
+      if (_fcmToken == null || _fcmToken!.isEmpty) {
+        final savedToken = await SecureStorageService.getString('fcm_token');
+        if (savedToken != null && savedToken.isNotEmpty) {
+          _fcmToken = savedToken;
+          AppLogger.w('⚠️ Using saved FCM token after refresh failure');
+        }
+      }
+      
       return _fcmToken;
     } catch (e, stackTrace) {
       AppLogger.e('Error refreshing FCM token', e, stackTrace);
+      
+      // محاولة استخدام token محفوظ
+      try {
+        final savedToken = await SecureStorageService.getString('fcm_token');
+        if (savedToken != null && savedToken.isNotEmpty) {
+          _fcmToken = savedToken;
+          AppLogger.w('⚠️ Using saved FCM token after error');
+          return _fcmToken;
+        }
+      } catch (storageError) {
+        AppLogger.e('Error getting saved FCM token', storageError);
+      }
+      
       return null;
     }
+  }
+  
+  /// إعادة محاولة إرسال FCM token إلى السيرفر (للاستخدام عند فتح التطبيق)
+  Future<bool> retrySendingFcmToken({String? userId, String? phone, String? driverId}) async {
+    AppLogger.i('🔄 Retrying to send FCM token to server...');
+    
+    // أولاً: محاولة الحصول على token جديد
+    await refreshFcmToken();
+    
+    // إذا كان لدينا token (جديد أو محفوظ)، أرسله
+    if (_fcmToken != null && _fcmToken!.isNotEmpty) {
+      AppLogger.i('📤 Sending FCM token (${_fcmToken!.substring(0, 20)}...) to server...');
+      return await sendFcmTokenToServer(userId, phone, driverId: driverId);
+    }
+    
+    AppLogger.w('⚠️ No FCM token available to send');
+    return false;
   }
 
   /// إرسال FCM token إلى السيرفر
   Future<bool> sendFcmTokenToServer(String? userId, String? phone, {String? driverId}) async {
     AppLogger.d('sendFcmTokenToServer called - userId: $userId, phone: $phone, driverId: $driverId');
     
-    // التأكد من أن FCM token موجود
+    // أولاً: محاولة الحصول على token من storage (الأسرع والأكثر موثوقية)
+    try {
+      final savedToken = await SecureStorageService.getString('fcm_token');
+      if (savedToken != null && savedToken.isNotEmpty) {
+        _fcmToken = savedToken;
+        AppLogger.i('✅ Using saved FCM token from storage: ${savedToken.substring(0, 30)}...');
+        // استمر في إرسال Token المحفوظ حتى لو كان قديماً
+        // Firebase سيقبل Token القديم إذا كان صالحاً
+      }
+    } catch (e) {
+      AppLogger.w('⚠️ Failed to get FCM token from storage: $e');
+    }
+    
+    // إذا لم يكن موجوداً في storage أو كان null، محاولة الحصول عليه من Firebase
     if (_fcmToken == null || _fcmToken!.isEmpty) {
-      AppLogger.w('⚠️ No FCM token available, attempting to get it...');
+      AppLogger.w('⚠️ No saved FCM token, attempting to get new one from Firebase...');
       
-      // أولاً: محاولة الحصول على token من storage
+      // محاولة الحصول على token مع معالجة أخطاء أفضل
       try {
-        final savedToken = await SecureStorageService.getString('fcm_token');
-        if (savedToken != null && savedToken.isNotEmpty) {
-          _fcmToken = savedToken;
-          AppLogger.i('✅ Retrieved FCM token from storage: ${savedToken.substring(0, 30)}...');
-        }
+        await _getFCMToken();
       } catch (e) {
-        AppLogger.w('⚠️ Failed to get FCM token from storage: $e');
+        AppLogger.w('⚠️ Failed to get FCM token: $e');
       }
       
-      // إذا لم يكن موجوداً في storage، محاولة الحصول عليه من Firebase
+      // إذا فشل، حاول مرة أخرى بعد تأخير أطول
       if (_fcmToken == null || _fcmToken!.isEmpty) {
-        // محاولة الحصول على token
-        await _getFCMToken();
+        AppLogger.w('⚠️ FCM token still null, waiting 5 seconds and retrying...');
+        await Future.delayed(Duration(seconds: 5));
         
-        // إذا فشل، حاول مرة أخرى بعد تأخير
-        if (_fcmToken == null || _fcmToken!.isEmpty) {
-          AppLogger.w('⚠️ FCM token still null, waiting 2 seconds and retrying...');
-          await Future.delayed(Duration(seconds: 2));
-          
-          // محاولة مباشرة
-          try {
-            if (_firebaseMessaging != null) {
-              final token = await _firebaseMessaging!.getToken();
-              if (token != null && token.isNotEmpty) {
-                _fcmToken = token;
-                await SecureStorageService.setString('fcm_token', token);
-                AppLogger.i('✅ Got FCM token on direct retry: ${token.substring(0, 30)}...');
-              }
+        // محاولة مباشرة مع timeout أطول
+        try {
+          if (_firebaseMessaging != null) {
+            final token = await _firebaseMessaging!.getToken()
+                .timeout(Duration(seconds: 10), onTimeout: () {
+              AppLogger.w('⏱️ Timeout waiting for FCM token');
+              return null;
+            });
+            if (token != null && token.isNotEmpty) {
+              _fcmToken = token;
+              await SecureStorageService.setString('fcm_token', token);
+              AppLogger.i('✅ Got FCM token on retry: ${token.substring(0, 30)}...');
             }
-          } catch (e) {
-            AppLogger.e('❌ Failed to get FCM token on direct retry', e);
           }
+        } catch (e) {
+          AppLogger.e('❌ Failed to get FCM token on retry', e);
+          AppLogger.e('   Error type: ${e.runtimeType}');
           
-          if (_fcmToken == null || _fcmToken!.isEmpty) {
-            AppLogger.e('❌ FCM token is still null or empty after all retries');
-            AppLogger.e('   Cannot send FCM token to server');
-            return false;
+          // إذا كان الخطأ FIS_AUTH_ERROR، هذا يعني مشكلة في Firebase configuration
+          if (e.toString().contains('FIS_AUTH_ERROR') || 
+              e.toString().contains('Firebase Installations')) {
+            AppLogger.e('   ⚠️ FIS_AUTH_ERROR detected - This usually means:');
+            AppLogger.e('      1. SHA fingerprint mismatch (Debug vs Release keystore)');
+            AppLogger.e('      2. google-services.json needs update after adding SHA');
+            AppLogger.e('      3. Internet connection issues');
+            AppLogger.e('   💡 Solution: Try using saved FCM token if available');
           }
         }
       }
+    }
+    
+    // إذا لم نحصل على token بعد كل المحاولات، استخدم المحفوظ حتى لو كان قديماً
+    if (_fcmToken == null || _fcmToken!.isEmpty) {
+      AppLogger.e('❌ FCM token is still null or empty after all retries');
+      AppLogger.e('   Cannot send FCM token to server - notifications will not work');
+      AppLogger.e('   Please check Firebase configuration (SHA fingerprints, google-services.json)');
+      return false;
     }
     
     AppLogger.d('FCM token available: ${_fcmToken!.substring(0, 20)}...');
