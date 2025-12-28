@@ -166,3 +166,6 @@ adb logcat | grep -i firebase
 3. تأكد من تطابق package name في جميع الأماكن
 4. جرب إعادة تثبيت التطبيق بعد تحديث Firebase settings
 
+
+
+

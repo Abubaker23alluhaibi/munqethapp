@@ -96,3 +96,6 @@ flutter build apk --release
 - تأكد من تفعيل الإذونات (Location, Internet)
 
 
+
+
+

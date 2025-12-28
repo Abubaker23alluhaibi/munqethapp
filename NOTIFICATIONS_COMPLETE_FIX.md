@@ -213,3 +213,6 @@ adb install build/app/outputs/flutter-apk/app-release.apk
 
 **✅ بعد اتباع هذه الخطوات، الإشعارات يجب أن تعمل بشكل صحيح!**
 
+
+
+

@@ -523,41 +523,45 @@ class NotificationService {
       return false;
     }
     
-    AppLogger.d('FCM token available: ${_fcmToken!.substring(0, 20)}...');
+    AppLogger.i('📤 FCM token available: ${_fcmToken!.substring(0, 30)}...');
+    AppLogger.i('   Token length: ${_fcmToken!.length} characters');
 
     try {
       if (userId != null || phone != null) {
         // For users
         final userService = UserService();
         if (phone != null) {
-          AppLogger.d('Sending FCM token for user phone: $phone');
+          AppLogger.i('📤 Sending FCM token for user phone: $phone');
+          AppLogger.i('   Token preview: ${_fcmToken!.substring(0, 30)}...');
           final success = await userService.updateFcmTokenByPhone(phone, _fcmToken!);
           if (success) {
-            AppLogger.i('✅ FCM token sent to server for user: $phone');
+            AppLogger.i('✅✅✅ FCM token sent successfully to server for user: $phone');
             return true;
           } else {
-            AppLogger.w('❌ Failed to send FCM token for user phone: $phone');
+            AppLogger.e('❌❌❌ Failed to send FCM token for user phone: $phone');
           }
         } else if (userId != null) {
-          AppLogger.d('Sending FCM token for user ID: $userId');
+          AppLogger.i('📤 Sending FCM token for user ID: $userId');
+          AppLogger.i('   Token preview: ${_fcmToken!.substring(0, 30)}...');
           final success = await userService.updateFcmToken(userId, _fcmToken!);
           if (success) {
-            AppLogger.i('✅ FCM token sent to server for user ID: $userId');
+            AppLogger.i('✅✅✅ FCM token sent successfully to server for user ID: $userId');
             return true;
           } else {
-            AppLogger.w('❌ Failed to send FCM token for user ID: $userId');
+            AppLogger.e('❌❌❌ Failed to send FCM token for user ID: $userId');
           }
         }
       } else if (driverId != null) {
         // For drivers
-        AppLogger.d('Sending FCM token for driver ID: $driverId');
+        AppLogger.i('📤 Sending FCM token for driver ID: $driverId');
+        AppLogger.i('   Token preview: ${_fcmToken!.substring(0, 30)}...');
         final driverService = DriverService();
         final success = await driverService.updateFcmTokenByDriverId(driverId, _fcmToken!);
         if (success) {
-          AppLogger.i('✅ FCM token sent to server for driver: $driverId');
+          AppLogger.i('✅✅✅ FCM token sent successfully to server for driver: $driverId');
           return true;
         } else {
-          AppLogger.w('❌ Failed to send FCM token for driver ID: $driverId');
+          AppLogger.e('❌❌❌ Failed to send FCM token for driver ID: $driverId');
         }
       } else {
         AppLogger.w('No userId, phone, or driverId provided');

@@ -255,17 +255,21 @@ class DriverService {
   // تحديث FCM token للسائق بـ Driver ID (المعرف المخصص)
   Future<bool> updateFcmTokenByDriverId(String driverId, String fcmToken) async {
     try {
-      AppLogger.d('Updating FCM token for driver ID: $driverId');
-      AppLogger.d('FCM token: ${fcmToken.substring(0, 20)}...');
+      AppLogger.i('📤 ===== UPDATING FCM TOKEN FOR DRIVER =====');
+      AppLogger.i('   Driver ID: $driverId');
+      AppLogger.i('   FCM Token: ${fcmToken.substring(0, 30)}...');
+      AppLogger.i('   Token Length: ${fcmToken.length}');
+      AppLogger.i('   Endpoint: PUT /drivers/driverId/$driverId/fcm-token');
       
       final response = await _apiService.put('/drivers/driverId/$driverId/fcm-token', data: {
         'fcmToken': fcmToken,
       });
       
-      AppLogger.d('Response status: ${response.statusCode}');
+      AppLogger.i('📥 Response received - Status: ${response.statusCode}');
+      AppLogger.d('   Response data: ${response.data}');
       
       if (response.statusCode == 200) {
-        AppLogger.i('✅ FCM token updated successfully for driver: $driverId');
+        AppLogger.i('✅✅✅ FCM token updated successfully for driver: $driverId');
         // تحديث البيانات المحلية إذا كان هذا السائق هو المسجل دخوله
         final currentDriver = await getCurrentDriver();
         if (currentDriver != null && currentDriver.driverId == driverId.toUpperCase()) {

@@ -107,3 +107,6 @@ flutter build apk --release
 ```
 فهذا يعني أن SHA fingerprint غير صحيح للـ keystore المستخدم.
 
+
+
+

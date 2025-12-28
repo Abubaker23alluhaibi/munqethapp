@@ -156,17 +156,21 @@ class UserService {
   Future<bool> updateFcmTokenByPhone(String phone, String fcmToken) async {
     try {
       final normalizedPhone = PhoneUtils.normalizePhone(phone);
-      AppLogger.d('Updating FCM token for user phone: $normalizedPhone');
-      AppLogger.d('FCM token: ${fcmToken.substring(0, 20)}...');
+      AppLogger.i('📤 ===== UPDATING FCM TOKEN FOR USER =====');
+      AppLogger.i('   Phone: $normalizedPhone (original: $phone)');
+      AppLogger.i('   FCM Token: ${fcmToken.substring(0, 30)}...');
+      AppLogger.i('   Token Length: ${fcmToken.length}');
+      AppLogger.i('   Endpoint: PUT /users/phone/$normalizedPhone/fcm-token');
       
       final response = await _apiService.put('/users/phone/$normalizedPhone/fcm-token', data: {
         'fcmToken': fcmToken,
       });
       
-      AppLogger.d('Response status: ${response.statusCode}');
+      AppLogger.i('📥 Response received - Status: ${response.statusCode}');
+      AppLogger.d('   Response data: ${response.data}');
       
       if (response.statusCode == 200) {
-        AppLogger.i('✅ FCM token updated successfully for user: $normalizedPhone');
+        AppLogger.i('✅✅✅ FCM token updated successfully for user: $normalizedPhone');
         return true;
       } else {
         AppLogger.w('Failed to update FCM token: status ${response.statusCode}');

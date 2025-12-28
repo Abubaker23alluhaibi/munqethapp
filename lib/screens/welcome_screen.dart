@@ -40,6 +40,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       curve: Curves.linear,
     ));
     
+    // تحميل حالة تسجيل الدخول فوراً بدون انتظار
     _navigateToLogin();
   }
 
@@ -51,12 +52,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   _navigateToLogin() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    
-    // تحميل حالة تسجيل الدخول من Provider
+    // تحميل حالة تسجيل الدخول فوراً بدون انتظار
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    // تحميل حالة تسجيل الدخول بشكل متوازي مع عرض الشاشة
     await authProvider.loadSavedAuth();
+    
+    if (!mounted) return;
     
     // التحقق من نوع المستخدم والانتقال للشاشة المناسبة
     if (authProvider.isAdminLoggedIn) {
@@ -80,6 +82,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     }
     
     // إذا لم يكن هناك تسجيل دخول، انتقل إلى صفحة فحص رقم الهاتف
+    // إضافة تأخير قصير فقط لعرض الشاشة الترحيبية (1 ثانية بدلاً من 3)
+    await Future.delayed(const Duration(seconds: 1));
     if (mounted) {
       context.go('/phone-check');
     }

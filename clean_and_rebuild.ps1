@@ -25,3 +25,6 @@ Write-Host ""
 Write-Host "يمكنك الآن تشغيل:" -ForegroundColor Cyan
 Write-Host "  flutter run" -ForegroundColor White
 
+
+
+

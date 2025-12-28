@@ -187,3 +187,6 @@ flutter build apk --release
 
 **✅ بعد إضافة SHA fingerprints في Firebase Console، الإشعارات ستعمل في Release APK!**
 
+
+
+
