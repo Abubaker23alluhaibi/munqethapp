@@ -114,7 +114,7 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('الرجاء إدخال رقم هاتف صحيح (عراقي أو تركي) أو إيدي صحيح'),
+              content: Text('الرجاء إدخال رقم هاتف صحيح '),
               backgroundColor: AppTheme.errorColor,
             ),
           );
@@ -286,7 +286,7 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
                 .scale(delay: 100.ms, duration: 500.ms, curve: Curves.easeOut),
             const SizedBox(height: 12),
             Text(
-              'أدخل رقمك أو الإيدي',
+              'أدخل رقم الهاتف ',
               style: TextStyle(
                 fontSize: 20,
                 color: Colors.white.withOpacity(0.9),
@@ -315,7 +315,7 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
                 fontFamily: GoogleFonts.notoKufiArabic().fontFamily,
               ),
               decoration: InputDecoration(
-                hintText: 'أدخل رقم الهاتف أو الإيدي',
+                hintText: 'أدخل رقم الهاتف   ',
                 hintStyle: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 16,
@@ -341,14 +341,14 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'الرجاء إدخال رقم الهاتف أو الإيدي';
+                  return 'الرجاء إدخال رقم الهاتف ';
                 }
-                // التحقق من صحة الرقم (عراقي أو تركي) (إذا كان رقم هاتف وليس إيدي)
+                // التحقق من صحة الرقم (إذا كان رقم هاتف وليس إيدي)
                 // الإيدي قد يكون نصاً، لذا نتحقق فقط إذا بدا كرقم هاتف
                 if (RegExp(r'^[0-9+\s\-\(\)]+$').hasMatch(value) && !PhoneUtils.isValidPhone(value)) {
                   // إذا كان يحتوي على أرقام فقط ولكن ليس رقم هاتف صحيح
                   if (value.length > 5) { // إذا كان طويلاً، قد يكون رقم هاتف غير صحيح
-                    return 'الرجاء إدخال رقم هاتف صحيح (عراقي أو تركي)';
+                    return 'الرجاء إدخال رقم هاتف صحيح';
                   }
                 }
                 return null;

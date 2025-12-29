@@ -449,7 +449,7 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'سيتم إرسال الطلب لجميع السائقين المتاحين. أول سائق يقبل الطلب سيحصل عليه.',
+                  'في انتظار الموافقة',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

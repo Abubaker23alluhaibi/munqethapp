@@ -115,6 +115,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
     double totalAmount = 0; // فقط للمكتملة
     double totalDeliveryFee = 0; // فقط للديلفري المكتملة
     double totalOrderAmount = 0; // فقط مبلغ الطلبية للديلفري المكتملة
+    double totalFullAmount = 0; // المبلغ الكامل (التوصيل + الطلبية للديلفري، أو إجمالي المبلغ للخدمات الأخرى)
+    double commission10Percent = 0; // 10% من المبلغ الكامل
     int completedOrders = 0;
     int pendingOrders = 0;
     int cancelledOrders = 0;
@@ -157,7 +159,19 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
       }
     }
     
+    // حساب المبلغ الكامل و 10% منه
+    if (isDelivery) {
+      // للديلفري: المبلغ الكامل = مبلغ التوصيل + مبلغ الطلبية
+      totalFullAmount = totalDeliveryFee + totalOrderAmount;
+    } else {
+      // للخدمات الأخرى: المبلغ الكامل = إجمالي المبلغ
+      totalFullAmount = totalAmount;
+    }
+    // حساب 10% من المبلغ الكامل
+    commission10Percent = totalFullAmount * 0.10;
+
     print('_applyPeriodFilter: Completed orders = $completedOrders, Total amount = $totalAmount');
+    print('_applyPeriodFilter: Total full amount = $totalFullAmount, Commission (10%) = $commission10Percent');
 
     setState(() {
       _filteredStatistics = {
@@ -168,6 +182,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
         'totalAmount': totalAmount, // فقط المكتملة
         'totalDeliveryFee': totalDeliveryFee, // فقط للديلفري المكتملة
         'totalOrderAmount': totalOrderAmount, // فقط مبلغ الطلبية للديلفري المكتملة
+        'totalFullAmount': totalFullAmount, // المبلغ الكامل
+        'commission10Percent': commission10Percent, // 10% من المبلغ الكامل
         'orders': filteredOrders,
         // إحصائيات الطلبات الملغاة (منفصلة)
         'cancelledTotalAmount': cancelledTotalAmount,
@@ -191,6 +207,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
       double totalAmount = 0; // فقط المكتملة
       double totalDeliveryFee = 0; // فقط للديلفري المكتملة
       double totalOrderAmount = 0; // فقط مبلغ الطلبية للديلفري المكتملة
+      double totalFullAmount = 0; // المبلغ الكامل (التوصيل + الطلبية للديلفري، أو إجمالي المبلغ للخدمات الأخرى)
+      double commission10Percent = 0; // 10% من المبلغ الكامل
       int completedOrders = 0;
       int pendingOrders = 0;
       int cancelledOrders = 0;
@@ -245,9 +263,22 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
       print('  - Completed: $completedOrders');
       print('  - Pending: $pendingOrders');
       print('  - Cancelled: $cancelledOrders');
+      // حساب المبلغ الكامل و 10% منه
+      if (isDelivery) {
+        // للديلفري: المبلغ الكامل = مبلغ التوصيل + مبلغ الطلبية
+        totalFullAmount = totalDeliveryFee + totalOrderAmount;
+      } else {
+        // للخدمات الأخرى: المبلغ الكامل = إجمالي المبلغ
+        totalFullAmount = totalAmount;
+      }
+      // حساب 10% من المبلغ الكامل
+      commission10Percent = totalFullAmount * 0.10;
+
       print('  - Total Amount (Completed): $totalAmount');
       print('  - Total Delivery Fee: $totalDeliveryFee');
       print('  - Total Order Amount: $totalOrderAmount');
+      print('  - Total Full Amount: $totalFullAmount');
+      print('  - Commission (10%): $commission10Percent');
       print('  - Cancelled Total Amount: $cancelledTotalAmount');
       print('  - Is Delivery: $isDelivery');
       
@@ -261,6 +292,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
             'totalAmount': totalAmount,
             'totalDeliveryFee': totalDeliveryFee,
             'totalOrderAmount': totalOrderAmount,
+            'totalFullAmount': totalFullAmount, // المبلغ الكامل
+            'commission10Percent': commission10Percent, // 10% من المبلغ الكامل
             'orders': ordersList,
             // إحصائيات الطلبات الملغاة
             'cancelledTotalAmount': cancelledTotalAmount,
@@ -286,6 +319,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
             'totalAmount': 0.0,
             'totalDeliveryFee': 0.0,
             'totalOrderAmount': 0.0,
+            'totalFullAmount': 0.0,
+            'commission10Percent': 0.0,
             'orders': <Map<String, dynamic>>[],
             'cancelledTotalAmount': 0.0,
             'cancelledDeliveryFee': 0.0,
@@ -739,6 +774,21 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
               AppTheme.primaryColor,
             ),
           ],
+          // عرض المبلغ الكامل و 10% منه لجميع الخدمات
+          const SizedBox(height: 12),
+          _buildStatCard(
+            'المبلغ الكامل',
+            '${(_filteredStatistics['totalFullAmount'] ?? 0.0).toStringAsFixed(0)} د.ع',
+            Icons.account_balance_wallet_rounded,
+            Colors.green,
+          ),
+          const SizedBox(height: 12),
+          _buildStatCard(
+            'العمولة (10%)',
+            '${(_filteredStatistics['commission10Percent'] ?? 0.0).toStringAsFixed(0)} د.ع',
+            Icons.percent_rounded,
+            Colors.purple,
+          ),
         ],
       ),
     );

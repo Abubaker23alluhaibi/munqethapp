@@ -16,6 +16,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _adminService = AdminService();
   final _supermarketService = SupermarketService();
   Map<String, int> _statistics = {};
+  Map<String, double> _commissionStatistics = {};
   bool _isLoading = true;
 
   @override
@@ -31,9 +32,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     try {
       final stats = await _adminService.getStatistics();
+      final commissionStats = await _adminService.getCommissionStatistics();
       if (mounted) {
         setState(() {
           _statistics = stats;
+          _commissionStatistics = commissionStats;
           _isLoading = false;
         });
       }
@@ -143,7 +146,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     .animate()
                     .fadeIn(delay: 200.ms, duration: 400.ms)
                     .slideY(begin: 0.2, end: 0),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                Text(
+                  'إحصائيات العمولات (10%)',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                )
+                    .animate()
+                    .fadeIn(delay: 250.ms, duration: 400.ms),
+                const SizedBox(height: 16),
+                _buildCommissionStatisticsGrid()
+                    .animate()
+                    .fadeIn(delay: 300.ms, duration: 400.ms)
+                    .slideY(begin: 0.2, end: 0),
+                const SizedBox(height: 24),
                 Text(
                   'إجراءات سريعة',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -157,6 +174,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     .animate()
                     .fadeIn(delay: 400.ms, duration: 400.ms)
                     .slideY(begin: 0.2, end: 0),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -344,6 +362,92 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommissionStatisticsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 2.2,
+      children: [
+        _buildCommissionStatCard(
+          'اليومي',
+          '${(_commissionStatistics['daily'] ?? 0.0).toString()} د.ع',
+          Colors.green.shade600,
+        ),
+        _buildCommissionStatCard(
+          'الأسبوعي',
+          '${(_commissionStatistics['weekly'] ?? 0.0).toString()} د.ع',
+          Colors.blue.shade600,
+        ),
+        _buildCommissionStatCard(
+          'الشهري',
+          '${(_commissionStatistics['monthly'] ?? 0.0).toString()} د.ع',
+          Colors.purple.shade600,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommissionStatCard(
+    String title,
+    String value,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+                height: 1.1,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  height: 1.0,
+                ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

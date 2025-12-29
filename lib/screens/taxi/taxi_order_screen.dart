@@ -280,9 +280,9 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  nearestDrivers.length > 0
-                      ? 'تم إرسال طلبك لأقرب ${nearestDrivers.length} سائقين متاحين'
-                      : 'بانتظار موافقة طلبك من أقرب تكسي',
+                  widget.serviceType == 'crane'
+                      ? 'في انتظار موافقة الكرين'
+                      : 'في انتظار الموافقة',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

@@ -842,7 +842,7 @@ class _TaxiScreenState extends State<TaxiScreen> {
               const SizedBox(height: 8),
               Text('التكلفة المقدرة: ${fare.toStringAsFixed(0)} د.ع'),
               const SizedBox(height: 8),
-              const Text('بانتظار موافقة طلبك من أقرب تكسي'),
+              const Text('في انتظار الموافقة'),
             ],
           ),
           actions: [

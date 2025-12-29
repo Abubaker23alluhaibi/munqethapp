@@ -484,7 +484,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 .scale(delay: 100.ms, duration: 500.ms, curve: Curves.easeOut),
             const SizedBox(height: 12),
             Text(
-              'أدخل رقمك أو الـ ID',
+              'أدخل رقمك',
               style: TextStyle(
                 fontSize: 20,
                 color: Colors.white.withOpacity(0.9),
@@ -496,7 +496,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 .animate()
                 .fadeIn(delay: 300.ms, duration: 500.ms)
                 .slideY(begin: 0.2, end: 0, delay: 300.ms, duration: 500.ms),
-            const SizedBox(height: 80),
+            const SizedBox(height: 8),
+            // جملة جميلة عن خدمات المنقذ
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Text(
+                'خدمات متنوعة في متناول يدك ',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.8),
+                  fontWeight: FontWeight.w300,
+                  fontFamily: GoogleFonts.notoKufiArabic().fontFamily,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+              )
+                  .animate()
+                  .fadeIn(delay: 400.ms, duration: 600.ms)
+                  .slideY(begin: 0.2, end: 0, delay: 400.ms, duration: 600.ms),
+            ),
+            const SizedBox(height: 60),
             // حقل إدخال الرقم بصندوق أبيض بسيط
             TextFormField(
               controller: _idController,
@@ -513,7 +533,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 fontFamily: GoogleFonts.notoKufiArabic().fontFamily,
               ),
               decoration: InputDecoration(
-                hintText: 'أدخل الرقم أو الـ ID',
+                hintText: 'أدخل الرقم',
                 hintStyle: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 18,
@@ -539,7 +559,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'الرجاء إدخال الرقم أو الـ ID';
+                  return 'الرجاء إدخال الرقم';
                 }
                 return null;
               },

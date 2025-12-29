@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../services/order_service.dart';
 import '../../services/driver_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/user_service.dart';
 import '../../widgets/location_picker_widget.dart';
 import '../../utils/constants.dart';
+import '../../providers/auth_provider.dart';
 
 class ServiceRequestScreen extends StatefulWidget {
   final String serviceType; // 'maintenance', 'car_emergency', 'fuel', 'maid', 'car_wash'
@@ -24,12 +27,15 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _orderService = OrderService();
   final _driverService = DriverService();
+  final _userService = UserService();
 
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _problemController = TextEditingController();
   final _otherReasonController = TextEditingController();
+  
+  String? _savedUserName; // الاسم المحفوظ من قاعدة البيانات
 
   // Location
   double? _customerLat;
@@ -83,18 +89,25 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
   }
 
   Future<void> _loadUserInfo() async {
-    final userName = StorageService.getString('user_name');
-    final userPhone = StorageService.getString('user_phone');
-    final userAddress = StorageService.getString('user_address');
+    // جلب بيانات المستخدم من AuthProvider (من قاعدة البيانات)
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.loadCurrentUser();
     
-    if (userName != null && userName.isNotEmpty) {
-      _nameController.text = userName;
-    }
-    if (userPhone != null && userPhone.isNotEmpty) {
-      _phoneController.text = userPhone;
-    }
-    if (userAddress != null && userAddress.isNotEmpty) {
-      _addressController.text = userAddress;
+    final user = authProvider.currentUser;
+    if (user != null) {
+      // استخدام الاسم والهاتف والعنوان من قاعدة البيانات
+      _savedUserName = user.name;
+      _nameController.text = user.name;
+      _phoneController.text = user.phone;
+      if (user.address != null && user.address!.isNotEmpty) {
+        _addressController.text = user.address!;
+      }
+    } else {
+      // إذا لم يكن المستخدم مسجل دخول، جرب جلب من Storage
+      final userPhone = StorageService.getString('user_phone');
+      if (userPhone != null && userPhone.isNotEmpty) {
+        _phoneController.text = userPhone;
+      }
     }
   }
 
@@ -236,8 +249,8 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
       });
 
       try {
-        // Validate location
-        if (_customerLat == null || _customerLng == null) {
+        // Validate location (not required for maid service)
+        if (widget.serviceType != 'maid' && (_customerLat == null || _customerLng == null)) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('الرجاء تحديد موقعك على الخريطة'),
@@ -262,18 +275,21 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                         : 'MAINT';
         final orderId = '$prefix${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
-        // Get customer location
-        final customerLat = _customerLat!;
-        final customerLng = _customerLng!;
+        // Find nearest driver (only if location is provided and not maid service)
+        Future<dynamic> nearestDriver;
+        if (widget.serviceType == 'maid') {
+          nearestDriver = Future.value(null);
+        } else if (_customerLat != null && _customerLng != null) {
+          nearestDriver = _driverService.findNearestDriver(
+            _customerLat!,
+            _customerLng!,
+            widget.serviceType,
+          );
+        } else {
+          nearestDriver = Future.value(null);
+        }
 
-        // Find nearest driver
-        final nearestDriver = _driverService.findNearestDriver(
-          customerLat,
-          customerLng,
-          widget.serviceType,
-        );
-
-        // Calculate fare for fuel or car wash
+        // Calculate fare for fuel, car wash, or maid
         double? fare;
         if (widget.serviceType == 'fuel') {
           // استخدام السعر المحسوب مسبقاً
@@ -281,13 +297,16 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
           if (fare == null) {
             // إذا لم يكن محسوباً، احسبه الآن
             final driver = await nearestDriver;
-            if (driver != null) {
-              final distance = driver.distanceTo(customerLat, customerLng) ?? 1.0;
+            if (driver != null && _customerLat != null && _customerLng != null) {
+              final distance = driver.distanceTo(_customerLat!, _customerLng!) ?? 1.0;
               fare = calculateFuelPrice(_fuelQuantity, distance).toDouble();
             }
           }
         } else if (widget.serviceType == 'car_wash' && _carWashSize != null) {
           fare = (_carWashSizes[_carWashSize]!['price'] as int).toDouble();
+        } else if (widget.serviceType == 'maid') {
+          // سعر ثابت للعاملة: 55000 دينار
+          fare = 55000.0;
         }
 
         // Determine emergency reason
@@ -298,17 +317,17 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
               : _selectedReason!;
         }
 
-        // Create order
+        // Create order - استخدام الاسم المدخل في النموذج (حتى لو كان هناك اسم محفوظ)
         final order = Order(
           id: orderId,
           type: widget.serviceType,
-          customerName: _nameController.text.trim(),
+          customerName: _nameController.text.trim(), // استخدام الاسم المدخل في النموذج
           customerPhone: _phoneController.text.trim(),
           customerAddress: _addressController.text.trim().isEmpty
               ? null
               : _addressController.text.trim(),
-          customerLatitude: customerLat,
-          customerLongitude: customerLng,
+          customerLatitude: widget.serviceType == 'maid' ? null : _customerLat,
+          customerLongitude: widget.serviceType == 'maid' ? null : _customerLng,
           status: OrderStatus.pending,
           notes: widget.serviceType != 'car_emergency' && widget.serviceType != 'car_wash'
               ? (_problemController.text.trim().isEmpty
@@ -384,13 +403,11 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
-                if (nearestDriver != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'سيتم التواصل معك قريباً',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                const SizedBox(height: 8),
+                Text(
+                  'في انتظار الموافقة',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
             actions: [
@@ -848,49 +865,111 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                     maxLines: 4,
                   ),
                 ],
-                const SizedBox(height: 24),
-                // Location Picker
-                LocationPickerWidget(
-                  label: 'حدد موقعك على الخريطة *',
-                  initialLatitude: _customerLat,
-                  initialLongitude: _customerLng,
-                  onLocationSelected: (lat, lng) {
-                    setState(() {
-                      _customerLat = lat;
-                      _customerLng = lng;
-                    });
-                    // حساب السعر عند تغيير الموقع (للبنزين)
-                    if (widget.serviceType == 'fuel') {
-                      _calculateFuelPrice();
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Address description
-                TextFormField(
-                  controller: _addressController,
-                  textDirection: TextDirection.rtl,
-                  decoration: InputDecoration(
-                    labelText: 'وصف الموقع',
-                    hintText: 'أدخل وصفاً للموقع (اختياري)',
-                    prefixIcon: const Icon(Icons.location_on_rounded, color: Colors.grey),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Colors.grey, width: 1),
+                // Location Picker (not required for maid service)
+                if (widget.serviceType != 'maid') ...[
+                  const SizedBox(height: 24),
+                  LocationPickerWidget(
+                    label: 'حدد موقعك على الخريطة *',
+                    initialLatitude: _customerLat,
+                    initialLongitude: _customerLng,
+                    onLocationSelected: (lat, lng) {
+                      setState(() {
+                        _customerLat = lat;
+                        _customerLng = lng;
+                      });
+                      // حساب السعر عند تغيير الموقع (للبنزين)
+                      if (widget.serviceType == 'fuel') {
+                        _calculateFuelPrice();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Address description
+                  TextFormField(
+                    controller: _addressController,
+                    textDirection: TextDirection.rtl,
+                    decoration: InputDecoration(
+                      labelText: 'وصف الموقع',
+                      hintText: 'أدخل وصفاً للموقع (اختياري)',
+                      prefixIcon: const Icon(Icons.location_on_rounded, color: Colors.grey),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.grey, width: 1),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.grey, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Colors.grey, width: 1),
+                    maxLines: 2,
+                  ),
+                ] else if (widget.serviceType == 'maid') ...[
+                  // Address description for maid (optional)
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: _addressController,
+                    textDirection: TextDirection.rtl,
+                    decoration: InputDecoration(
+                      labelText: 'وصف الموقع (اختياري)',
+                      hintText: 'أدخل وصفاً للموقع',
+                      prefixIcon: const Icon(Icons.location_on_rounded, color: Colors.grey),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.grey, width: 1),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.grey, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
+                      ),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
+                    maxLines: 2,
+                  ),
+                  // عرض سعر العاملة
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.primaryColor,
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'السعر الإجمالي:',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '55000 د.ع',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  maxLines: 2,
-                ),
+                ],
                 // عرض السعر للبنزين
                 if (widget.serviceType == 'fuel' && _calculatedFare != null) ...[
                   const SizedBox(height: 24),

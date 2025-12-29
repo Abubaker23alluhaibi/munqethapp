@@ -60,6 +60,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     
     if (!mounted) return;
     
+    // الانتظار 5 ثواني دائماً قبل الانتقال للصفحة التالية
+    await Future.delayed(const Duration(seconds: 5));
+    
+    if (!mounted) return;
+    
     // التحقق من نوع المستخدم والانتقال للشاشة المناسبة
     if (authProvider.isAdminLoggedIn) {
       context.go('/admin/dashboard');
@@ -82,11 +87,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     }
     
     // إذا لم يكن هناك تسجيل دخول، انتقل إلى صفحة فحص رقم الهاتف
-    // إضافة تأخير قصير فقط لعرض الشاشة الترحيبية (1 ثانية بدلاً من 3)
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      context.go('/phone-check');
-    }
+    context.go('/phone-check');
   }
 
   @override
