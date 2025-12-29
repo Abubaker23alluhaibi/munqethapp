@@ -47,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
     } catch (e) {
-      print('Error loading wallet balance: $e');
+      // Error loading wallet balance
     }
   }
 

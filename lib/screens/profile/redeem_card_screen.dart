@@ -43,7 +43,7 @@ class _RedeemCardScreenState extends State<RedeemCardScreen> {
         }
       }
     } catch (e) {
-      print('Error loading wallet balance: $e');
+      // Error loading wallet balance
     }
   }
 

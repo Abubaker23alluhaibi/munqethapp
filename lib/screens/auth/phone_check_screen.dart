@@ -125,9 +125,6 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
         try {
           final userExists = await _userService.userExistsByPhone(normalizedPhone);
 
-          // طباعة للتحقق (يمكن حذفها لاحقاً)
-          print('Phone: $normalizedPhone, User exists: $userExists');
-
           setState(() {
             _isLoading = false;
           });
@@ -137,14 +134,12 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
           // - إذا لم يكن موجود → صفحة إنشاء الحساب (/signup)
           if (userExists) {
             // المستخدم موجود في قاعدة البيانات (منشأ حساب) - انقله لصفحة إدخال الرمز مع الرقم
-            print('Navigating to /login - user exists');
             await Future.delayed(const Duration(milliseconds: 200));
             if (mounted) {
               context.go('/login?id=${Uri.encodeComponent(normalizedPhone)}');
             }
           } else {
             // المستخدم غير موجود - انقله لصفحة إنشاء الحساب
-            print('Navigating to /signup - user does not exist');
             await Future.delayed(const Duration(milliseconds: 200));
             if (mounted) {
               context.go('/signup?phone=${Uri.encodeComponent(normalizedPhone)}');
@@ -156,9 +151,6 @@ class _PhoneCheckScreenState extends State<PhoneCheckScreen> {
           setState(() {
             _isLoading = false;
           });
-          
-          print('Error checking user exists: $e');
-          print('Navigating to /signup - connection error, assuming user does not exist');
           
           // عرض رسالة تحذيرية
           ScaffoldMessenger.of(context).showSnackBar(

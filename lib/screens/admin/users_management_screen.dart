@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../services/admin_service.dart';
 import '../../models/driver.dart';
+import '../../core/utils/app_logger.dart';
 import 'edit_user_screen.dart';
 
 class UsersManagementScreen extends StatefulWidget {
@@ -36,22 +37,18 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
     });
 
     try {
-      print('_loadData: Starting to load drivers...');
       final drivers = await _adminService.getAllDrivers();
-      print('_loadData: Received ${drivers.length} drivers');
       
       if (mounted) {
         setState(() {
           _allDrivers = drivers;
-          print('_loadData: Set _allDrivers to ${_allDrivers.length} drivers');
           _calculateStatistics();
           _applyFilters();
           _isLoading = false;
-          print('_loadData: Finished loading, statistics: $_statistics');
         });
       }
     } catch (e) {
-      print('_loadData: Error loading drivers: $e');
+      AppLogger.e('Error loading drivers', e);
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -68,8 +65,6 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
   }
 
   void _calculateStatistics() {
-    print('_calculateStatistics: Starting calculation from ${_allDrivers.length} drivers');
-    
     // حساب الإحصائيات بشكل صريح
     final allCount = _allDrivers.length;
     final deliveryCount = _allDrivers.where((d) => d.serviceType == 'delivery').length;
@@ -78,22 +73,6 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
     final craneCount = _allDrivers.where((d) => d.serviceType == 'crane').length;
     final fuelCount = _allDrivers.where((d) => d.serviceType == 'fuel').length;
     final maidCount = _allDrivers.where((d) => d.serviceType == 'maid').length;
-    
-    // طباعة تفاصيل كل نوع
-    print('_calculateStatistics: Breakdown:');
-    print('  - All: $allCount');
-    print('  - Delivery: $deliveryCount');
-    print('  - Taxi: $taxiCount');
-    print('  - Car Emergency: $carEmergencyCount');
-    print('  - Crane: $craneCount');
-    print('  - Fuel: $fuelCount');
-    print('  - Maid: $maidCount');
-    
-    // طباعة قائمة السائقين حسب النوع
-    print('_calculateStatistics: Drivers by type:');
-    for (var driver in _allDrivers) {
-      print('  - ${driver.name} (${driver.driverId}): ${driver.serviceType}');
-    }
     
     _statistics = {
       'all': allCount,
@@ -104,8 +83,6 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
       'fuel': fuelCount,
       'maid': maidCount,
     };
-    
-    print('_calculateStatistics: Final statistics: $_statistics');
   }
 
   void _applyFilters() {
@@ -277,12 +254,8 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
   Widget _buildStatisticsSection() {
     // لا نعرض الإحصائيات إذا كانت فارغة أو أثناء التحميل
     if (_isLoading || _statistics.isEmpty) {
-      print('_buildStatisticsSection: Skipping display - isLoading: $_isLoading, statistics empty: ${_statistics.isEmpty}');
       return const SizedBox.shrink();
     }
-    
-    print('_buildStatisticsSection: Displaying statistics: $_statistics');
-    print('_buildStatisticsSection: _allDrivers.length: ${_allDrivers.length}');
     
     return Container(
       padding: const EdgeInsets.all(16),

@@ -88,7 +88,7 @@ class _AddLocationScreenState extends State<AddLocationScreen> {
         _updateMapCamera();
       }
     } catch (e) {
-      print('Error getting location: $e');
+      // Error getting location
       if (mounted) {
         setState(() {
           _currentLocation = const LatLng(33.3152, 44.3661);
@@ -121,7 +121,7 @@ class _AddLocationScreenState extends State<AddLocationScreen> {
         _addressController.text = address;
       }
     } catch (e) {
-      print('Error getting address: $e');
+      // Error getting address
     }
 
     // إظهار dialog لإضافة الموقع
@@ -141,7 +141,7 @@ class _AddLocationScreenState extends State<AddLocationScreen> {
           _addressController.text = address;
         }
       } catch (e) {
-        print('Error getting address: $e');
+        // Error getting address
       }
     }
 

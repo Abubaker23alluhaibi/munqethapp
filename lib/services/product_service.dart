@@ -8,27 +8,19 @@ class ProductService {
   // الحصول على جميع المنتجات
   Future<List<Product>> getAllProducts(String supermarketId) async {
     try {
-      print('Getting products for supermarketId: $supermarketId');
-      
       final response = await _apiService.get('/products', queryParameters: {
         'supermarketId': supermarketId,
       });
-      
-      print('Products response status: ${response.statusCode}');
-      print('Products response data: ${response.data}');
       
       if (response.statusCode == 200 && response.data != null) {
         final List<dynamic> jsonList = response.data;
         final products = jsonList
             .map((json) => Product.fromJson(json as Map<String, dynamic>))
             .toList();
-        print('Parsed ${products.length} products');
         return products;
       }
-      print('No products found or error in response');
       return [];
     } catch (e) {
-      print('Error getting all products: $e');
       return [];
     }
   }
@@ -46,7 +38,6 @@ class ProductService {
       }
       return null;
     } catch (e) {
-      print('Error getting product by id: $e');
       return null;
     }
   }
@@ -59,22 +50,14 @@ class ProductService {
       data.remove('id');
       data.remove('_id');
       
-      print('Adding product with data: $data');
-      
       final response = await _apiService.post('/products', data: data);
-      
-      print('Response status: ${response.statusCode}');
-      print('Response data: ${response.data}');
       
       if (response.statusCode == 201 && response.data != null) {
         final addedProduct = Product.fromJson(response.data as Map<String, dynamic>);
-        print('Product added successfully: ${addedProduct.name} with id: ${addedProduct.id}');
         return addedProduct;
       }
-      print('Failed to add product: Status ${response.statusCode}');
       return null;
     } catch (e) {
-      print('Error adding product: $e');
       return null;
     }
   }
@@ -87,21 +70,14 @@ class ProductService {
       data.remove('id');
       data.remove('_id');
       
-      print('Updating product ${product.id} with data: $data');
-      
       final response = await _apiService.put('/products/${product.id}', data: data);
-      
-      print('Response status: ${response.statusCode}');
       
       if (response.statusCode == 200 && response.data != null) {
         final updatedProduct = Product.fromJson(response.data as Map<String, dynamic>);
-        print('Product updated successfully: ${updatedProduct.name}');
         return updatedProduct;
       }
-      print('Failed to update product: Status ${response.statusCode}');
       return null;
     } catch (e) {
-      print('Error updating product: $e');
       return null;
     }
   }
@@ -112,7 +88,6 @@ class ProductService {
       final response = await _apiService.delete('/products/$id');
       return response.statusCode == 200;
     } catch (e) {
-      print('Error deleting product: $e');
       return false;
     }
   }
@@ -137,7 +112,6 @@ class ProductService {
       }
       return [];
     } catch (e) {
-      print('Error searching products: $e');
       return [];
     }
   }
@@ -152,7 +126,6 @@ class ProductService {
       }
       return allProducts.where((p) => p.category == category).toList();
     } catch (e) {
-      print('Error getting products by category: $e');
       return [];
     }
   }
@@ -164,7 +137,6 @@ class ProductService {
       final categories = products.map((p) => p.category).toSet().toList();
       return categories;
     } catch (e) {
-      print('Error getting categories: $e');
       return [];
     }
   }
@@ -177,12 +149,9 @@ class ProductService {
       final adminService = AdminService();
       final supermarket = await adminService.getOrCreateAdminSupermarket();
       
-      print('Getting products for Munqeth shop with id: ${supermarket.id}');
-      
       // استخدام الـ _id الصحيح من MongoDB
       return await getAllProducts(supermarket.id);
     } catch (e) {
-      print('Error getting Munqeth supermarket, using fallback: $e');
       // Fallback: محاولة استخدام MUNQETH_SHOP
       return await getAllProducts('MUNQETH_SHOP');
     }

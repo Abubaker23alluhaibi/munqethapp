@@ -200,7 +200,6 @@ class _TaxiScreenState extends State<TaxiScreen> {
         _updateMarkers();
       }
     } catch (e) {
-      print('Error loading taxi drivers: $e');
       // في حالة الخطأ، تأكد من تحديث العلامات على الأقل
       if (mounted) {
         _updateMarkers();
@@ -267,7 +266,7 @@ class _TaxiScreenState extends State<TaxiScreen> {
       
       image.dispose();
     } catch (e) {
-      print('Error loading car icon: $e');
+      // Error loading car icon
       // في حالة الخطأ، استخدم أيقونة افتراضية باللون الأزرق
       _carIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
     }

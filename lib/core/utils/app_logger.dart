@@ -31,45 +31,21 @@ class AppLogger {
     }
   }
 
-  /// Log warning message (يظهر في debug و release)
+  /// Log warning message (يظهر فقط في debug mode)
   static void w(String message, [dynamic error, StackTrace? stackTrace]) {
     if (kDebugMode) {
       _logger.w(message, error: error, stackTrace: stackTrace);
-    } else {
-      // في release mode، نطبع warnings فقط كـ print بسيط
-      // يمكن إزالة هذا السطر إذا أردت إخفاء warnings أيضاً
-      // ignore: avoid_print
-      print('[WARNING] $message');
     }
+    // في release mode، لا نطبع warnings
   }
 
-  /// Log error message (يظهر في debug و release)
+  /// Log error message (يظهر فقط في debug mode)
   static void e(String message, [dynamic error, StackTrace? stackTrace]) {
     if (kDebugMode) {
       _logger.e(message, error: error, stackTrace: stackTrace);
-    } else {
-      // في release mode، نطبع errors بشكل محدود (بدون stack traces حساسة)
-      // ignore: avoid_print
-      print('[ERROR] $message');
-      if (error != null) {
-        // طباعة نوع الخطأ فقط بدون تفاصيل حساسة
-        if (error is DioException) {
-          // ignore: avoid_print
-          print('[ERROR] Network error: ${error.type}');
-          // ignore: avoid_print
-          print('[ERROR] Response status: ${error.response?.statusCode}');
-          // لا نطبع response data لأنه قد يحتوي على معلومات حساسة
-          // ignore: avoid_print
-          print('[ERROR] Request path: ${error.requestOptions.path}');
-        } else {
-          // طباعة نوع الخطأ فقط
-          // ignore: avoid_print
-          print('[ERROR] Error type: ${error.runtimeType}');
-        }
-      }
-      // لا نطبع Stack Traces في production لأسباب أمنية
-      // يمكن إرسالها إلى Crashlytics بدلاً من ذلك
     }
+    // في release mode، لا نطبع errors في console
+    // يمكن إرسالها إلى Crashlytics أو خدمة مراقبة الأخطاء بدلاً من ذلك
   }
 
   /// Log fatal error (يظهر دائماً)
@@ -88,7 +64,7 @@ class AppLogger {
 void safePrint(Object? object) {
   if (kDebugMode) {
     // ignore: avoid_print
-    print(object);
+    AppLogger.d(object.toString());
   }
   // في release mode، لا نطبع أي شيء
 }

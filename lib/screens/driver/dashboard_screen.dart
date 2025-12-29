@@ -61,13 +61,9 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           // طلب صلاحية الخلفية (Always)
           // ملاحظة: في Android 10+ قد يحتاج المستخدم للذهاب للإعدادات يدوياً
           final backgroundPermission = await Geolocator.requestPermission();
-          if (backgroundPermission != LocationPermission.always) {
-            print('⚠️ Background location permission not granted. For continuous tracking, please enable "Allow all the time" in app settings.');
-          } else {
-            print('✅ Background location permission granted. Continuous tracking is enabled.');
-          }
+          // Background permission requested
         } else if (permission == LocationPermission.always) {
-          print('✅ Background location permission already granted.');
+          // Background permission already granted
         }
       }
     }
@@ -101,7 +97,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           }
         },
         onError: (error) {
-          print('Error in position stream: $error');
+          // Error in position stream
         },
       );
     } else {
@@ -125,7 +121,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
         );
       }
     } catch (e) {
-      print('Error updating driver location: $e');
+      // Error updating driver location
     }
   }
 
@@ -145,7 +141,6 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
       }
     } catch (e) {
       // تجاهل الأخطاء في تحديث الموقع لتجنب إزعاج السائق
-      print('Error updating driver location: $e');
     }
   }
 

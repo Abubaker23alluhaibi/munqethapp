@@ -55,7 +55,7 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
         _walletBalance = await _cardService.getUserWalletBalance(userPhone);
       }
     } catch (e) {
-      print('Error loading payment data: $e');
+      // Error loading payment data
     } finally {
       if (mounted) {
         setState(() {

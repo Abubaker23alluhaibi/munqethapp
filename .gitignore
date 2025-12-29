@@ -52,6 +52,22 @@ app.*.map.json
 # Security - API Keys and sensitive configuration files
 /android/app/src/main/res/values/secrets.xml
 /android/app/google-services.json
+/android/app/src/main/res/values/strings.xml
+# Note: strings.xml should not contain API keys. If it does, keep it in .gitignore
+
+# iOS - Google Services (if exists)
+/ios/Runner/GoogleService-Info.plist
 
 # Local properties (may contain sensitive info)
 /android/local.properties
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+
+# Backup files
+*.backup
+*.bak
+*~

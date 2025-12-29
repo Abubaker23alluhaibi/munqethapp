@@ -17,7 +17,6 @@ class AdvertisementService {
       }
       return [];
     } catch (e) {
-      print('Error getting all advertisements: $e');
       return [];
     }
   }
@@ -62,7 +61,6 @@ class AdvertisementService {
       }
       return null;
     } catch (e) {
-      print('Error getting advertisement by id: $e');
       return null;
     }
   }
@@ -81,7 +79,6 @@ class AdvertisementService {
       }
       return null;
     } catch (e) {
-      print('Error creating advertisement: $e');
       return null;
     }
   }
@@ -92,7 +89,6 @@ class AdvertisementService {
       final response = await _apiService.put('/advertisements/${advertisement.id}', data: advertisement.toJson());
       return response.statusCode == 200;
     } catch (e) {
-      print('Error updating advertisement: $e');
       return false;
     }
   }
@@ -103,7 +99,6 @@ class AdvertisementService {
       final response = await _apiService.delete('/advertisements/$id');
       return response.statusCode == 200;
     } catch (e) {
-      print('Error deleting advertisement: $e');
       return false;
     }
   }

@@ -88,18 +88,19 @@ class SocketService {
     });
 
     // الاستماع للطلبات الجديدة
-    _socket!.on('order:new', (data) {
+    _socket!.on('order:new', (data) async {
       AppLogger.d('📦 New order received via Socket.IO: $data');
       if (data is Map<String, dynamic>) {
-        final isForThisDriver = data['isForThisDriver'] as bool? ?? false;
-        if (isForThisDriver) {
+        // التحقق من أن الطلب موجه للسائق الحالي
+        final shouldShow = await _shouldShowNewOrderNotification(data);
+        if (shouldShow) {
           // إشعار للسائق
-          _notificationService.showNotification(
+          await _notificationService.showNotification(
             title: 'طلب جديد متاح',
             body: 'لديك طلب جديد - اضغط لعرض التفاصيل',
             data: {
               'type': 'new_order',
-              'orderId': data['_id']?.toString(),
+              'orderId': data['_id']?.toString() ?? data['id']?.toString(),
             },
           );
         }
@@ -111,10 +112,12 @@ class SocketService {
       AppLogger.d('🔄 Order status updated via Socket.IO: $data');
       if (data is Map<String, dynamic>) {
         // التحقق من أن التحديث موجه للمستخدم الحالي
-        // ملاحظة: تحديثات حالة الطلب عادة تكون عامة، لكن سنعتمد على FCM للإشعارات
-        // لذلك سنعطل الإشعارات من Socket.IO هنا لتجنب التكرار
-        AppLogger.d('🔇 Order status update received via Socket.IO - skipping notification (FCM will handle it)');
-        // لا نعرض إشعار هنا - FCM سيرسل الإشعار للمستخدمين الصحيحين فقط
+        final shouldShow = await _shouldShowOrderStatusNotification(data);
+        if (shouldShow) {
+          await _showOrderStatusNotification(data);
+        } else {
+          AppLogger.d('🔇 Order status update filtered out - not for current user');
+        }
       }
     });
   }
@@ -140,6 +143,33 @@ class SocketService {
   void joinOrderRoom(String orderId) {
     joinRoom('order:$orderId');
     _socket?.emit('order:track', orderId);
+  }
+
+  /// التحقق من أن طلب جديد موجه للسائق الحالي
+  Future<bool> _shouldShowNewOrderNotification(Map<String, dynamic> data) async {
+    try {
+      // جلب driverId المحفوظ (للسائق)
+      final driverId = await SecureStorageService.getString('driver_id');
+      
+      // إذا لم يكن المستخدم سائق، لا تعرض الإشعار
+      if (driverId == null || driverId.isEmpty) {
+        AppLogger.d('🔇 New order notification - current user is not a driver');
+        return false;
+      }
+      
+      // جلب نوع الخدمة من الطلب
+      final orderType = data['type'] as String?;
+      final serviceType = data['serviceType'] as String?;
+      
+      // إذا كان هناك نوع خدمة محدد، يمكن إضافة فلترة إضافية هنا
+      // حالياً نعرض الإشعار لجميع السائقين المتاحين
+      
+      AppLogger.d('✅ New order notification - current user is driver: $driverId');
+      return true;
+    } catch (e, stackTrace) {
+      AppLogger.e('Error checking if new order notification should be shown', e, stackTrace);
+      return false;
+    }
   }
 
   /// التحقق من أن الإشعار موجه للمستخدم الحالي
@@ -204,6 +234,90 @@ class SocketService {
       AppLogger.e('Error checking if notification should be shown', e, stackTrace);
       // في حالة الخطأ، لا تعرض الإشعار (آمن أكثر)
       return false;
+    }
+  }
+
+  /// التحقق من أن تحديث حالة الطلب موجه للمستخدم الحالي
+  Future<bool> _shouldShowOrderStatusNotification(Map<String, dynamic> data) async {
+    try {
+      final orderId = data['orderId'] as String?;
+      if (orderId == null) return false;
+
+      // جلب رقم الهاتف المحفوظ (للمستخدم)
+      final userPhone = await SecureStorageService.getString('user_phone');
+      // جلب driverId المحفوظ (للسائق)
+      final driverId = await SecureStorageService.getString('driver_id');
+      
+      // إذا كان المستخدم يتابع هذا الطلب، اعرض الإشعار
+      // (سيتم التحقق من الطلب في السيرفر أو من البيانات المحلية)
+      
+      // إذا كان هناك رقم هاتف أو driverId، اعرض الإشعار
+      // (الفلترة الدقيقة تتم في السيرفر)
+      if (userPhone != null || driverId != null) {
+        AppLogger.d('✅ Order status update - user/driver logged in, showing notification');
+        return true;
+      }
+      
+      return false;
+    } catch (e, stackTrace) {
+      AppLogger.e('Error checking if order status notification should be shown', e, stackTrace);
+      return false;
+    }
+  }
+
+  /// عرض إشعار تحديث حالة الطلب
+  Future<void> _showOrderStatusNotification(Map<String, dynamic> data) async {
+    try {
+      final orderId = data['orderId'] as String?;
+      final status = data['status'] as String?;
+      
+      if (orderId == null || status == null) return;
+
+      // تحديد رسالة الإشعار حسب الحالة
+      String title = 'تحديث الطلب';
+      String body = 'تم تحديث حالة الطلب';
+      
+      switch (status) {
+        case 'accepted':
+          title = 'تم قبول طلبك';
+          body = 'تم قبول طلبك - السائق في الطريق إليك';
+          break;
+        case 'arrived':
+          title = 'وصل السائق';
+          body = 'وصل السائق إلى موقعك';
+          break;
+        case 'in_progress':
+          title = 'السائق في الطريق';
+          body = 'السائق في الطريق إليك';
+          break;
+        case 'delivered':
+          title = 'تم التوصيل';
+          body = 'تم التوصيل بنجاح';
+          break;
+        case 'completed':
+          title = 'تم إكمال الطلب';
+          body = 'تم إكمال طلبك بنجاح';
+          break;
+        case 'cancelled':
+          title = 'تم إلغاء الطلب';
+          body = 'تم إلغاء الطلب';
+          break;
+        default:
+          title = 'تحديث الطلب';
+          body = 'تم تحديث حالة الطلب إلى: $status';
+      }
+
+      await _notificationService.showNotification(
+        title: title,
+        body: body,
+        data: {
+          'type': 'order_status_update',
+          'orderId': orderId,
+          'status': status,
+        },
+      );
+    } catch (e, stackTrace) {
+      AppLogger.e('Error showing order status notification', e, stackTrace);
     }
   }
 

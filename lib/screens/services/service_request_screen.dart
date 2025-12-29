@@ -139,7 +139,7 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
         });
       }
     } catch (e) {
-      print('Error calculating fuel price: $e');
+      // Error calculating fuel price
       setState(() {
         _calculatedFare = null;
       });

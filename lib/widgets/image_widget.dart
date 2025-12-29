@@ -94,7 +94,7 @@ class _ImageWidgetState extends State<ImageWidget> {
           fit: widget.fit,
           placeholder: (context, url) => widget.placeholder ?? _buildPlaceholder(),
           errorWidget: (context, url, error) {
-            print('Error loading image from URL: $url, error: $error');
+            // Error loading image from URL
             return widget.errorWidget ?? _buildErrorWidget();
           },
         ),
@@ -120,7 +120,7 @@ class _ImageWidgetState extends State<ImageWidget> {
         cacheWidth: widget.width != null ? widget.width!.toInt() : null,
         cacheHeight: widget.height != null ? widget.height!.toInt() : null,
         errorBuilder: (context, error, stackTrace) {
-          print('Error loading image from file: ${widget.imagePath}, error: $error');
+          // Error loading image from file
           return widget.errorWidget ?? _buildErrorWidget();
         },
       ),

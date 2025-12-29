@@ -156,7 +156,6 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
           limit: 4,
         );
         
-        print('Found ${nearestDrivers.length} nearest drivers for ${widget.serviceType} order');
         
         // For display purposes, use the first driver
         final nearestDriver = nearestDrivers.isNotEmpty ? nearestDrivers[0] : null;

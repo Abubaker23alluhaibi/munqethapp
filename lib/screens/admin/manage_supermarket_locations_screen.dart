@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../config/theme.dart';
 import '../../services/admin_service.dart';
 import '../../models/supermarket.dart';
+import '../../core/utils/app_logger.dart';
 import 'add_location_screen.dart';
 
 class ManageSupermarketLocationsScreen extends StatefulWidget {
@@ -73,7 +74,7 @@ class _ManageSupermarketLocationsScreenState
         _loadLocations();
       }
     } catch (e) {
-      print('Error refreshing data: $e');
+      AppLogger.e('Error refreshing data: $e');
     }
   }
 

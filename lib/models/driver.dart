@@ -71,11 +71,7 @@ class Driver {
         ? driverIdValue.toUpperCase() 
         : id;
     
-    // طباعة للتأكد من وجود driverId
-    if (driverIdValue == null || driverIdValue.isEmpty) {
-      print('WARNING: driverId is missing in JSON, using _id as fallback: $id');
-      print('JSON keys: ${json.keys}');
-    }
+    // استخدام _id كـ fallback إذا لم يكن driverId موجوداً
     
     return Driver(
       id: id,

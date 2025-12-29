@@ -132,9 +132,6 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
       final deliveryFee = order['deliveryFee'] as double? ?? 0.0;
       final orderAmount = order['orderAmount'] as double? ?? (orderTotal - deliveryFee);
       
-      // طباعة للحصول على تفاصيل الطلب (للتصحيح)
-      print('Order ${order['id']}: status=$status, total=$orderTotal, deliveryFee=$deliveryFee');
-      
       if (status == 'completed' || status == 'delivered') {
         // فقط المكتملة (completed أو delivered) تُحسب في المبالغ الرئيسية
         completedOrders++;
@@ -170,9 +167,6 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
     // حساب 10% من المبلغ الكامل
     commission10Percent = totalFullAmount * 0.10;
 
-    print('_applyPeriodFilter: Completed orders = $completedOrders, Total amount = $totalAmount');
-    print('_applyPeriodFilter: Total full amount = $totalFullAmount, Commission (10%) = $commission10Percent');
-
     setState(() {
       _filteredStatistics = {
         'totalOrders': filteredOrders.length,
@@ -196,11 +190,8 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
   // جلب الإحصائيات الحقيقية من السيرفر
   Future<void> _loadRealStatistics(Driver driver) async {
     try {
-      print('_loadRealStatistics: Loading orders for driver ${driver.id} (${driver.driverId})');
-      
       // جلب جميع طلبات السائق من السيرفر
       final orders = await _orderService.getOrdersByDriver(driver.id);
-      print('_loadRealStatistics: Received ${orders.length} orders from API');
       
       // تحويل الطلبات إلى تنسيق مناسب
       List<Map<String, dynamic>> ordersList = [];
@@ -258,11 +249,6 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
       
       final totalOrders = orders.length;
       
-      print('_loadRealStatistics: Calculated statistics:');
-      print('  - Total Orders: $totalOrders');
-      print('  - Completed: $completedOrders');
-      print('  - Pending: $pendingOrders');
-      print('  - Cancelled: $cancelledOrders');
       // حساب المبلغ الكامل و 10% منه
       if (isDelivery) {
         // للديلفري: المبلغ الكامل = مبلغ التوصيل + مبلغ الطلبية
@@ -274,14 +260,6 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
       // حساب 10% من المبلغ الكامل
       commission10Percent = totalFullAmount * 0.10;
 
-      print('  - Total Amount (Completed): $totalAmount');
-      print('  - Total Delivery Fee: $totalDeliveryFee');
-      print('  - Total Order Amount: $totalOrderAmount');
-      print('  - Total Full Amount: $totalFullAmount');
-      print('  - Commission (10%): $commission10Percent');
-      print('  - Cancelled Total Amount: $cancelledTotalAmount');
-      print('  - Is Delivery: $isDelivery');
-      
       if (mounted) {
         setState(() {
           _allStatistics = {
@@ -307,7 +285,6 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
         }
       }
     } catch (e) {
-      print('_loadRealStatistics: Error loading statistics: $e');
       // في حالة الخطأ، نستخدم بيانات فارغة
       if (mounted) {
         setState(() {

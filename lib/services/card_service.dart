@@ -3,6 +3,7 @@ import '../models/user_card.dart';
 import '../core/api/api_service_improved.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../utils/phone_utils.dart';
+import '../core/utils/app_logger.dart';
 import 'dart:convert';
 
 class CardService {
@@ -16,7 +17,7 @@ class CardService {
     // إذا كان الرقم يبدأ بـ 0 وله أكثر من رقم واحد، نزيل الصفر
     if (cleaned.length > 1 && cleaned.startsWith('0')) {
       cleaned = cleaned.substring(1);
-      print('_canonicalPhone: Removed leading zero from $phone -> $cleaned');
+      AppLogger.d('_canonicalPhone: Removed leading zero from $phone -> $cleaned');
     }
     return cleaned;
   }
@@ -34,7 +35,7 @@ class CardService {
       }
       return [];
     } catch (e) {
-      print('Error getting all cards: $e');
+      AppLogger.e('Error getting all cards', e);
       return [];
     }
   }
@@ -48,7 +49,7 @@ class CardService {
       }
       return null;
     } catch (e) {
-      print('Error getting card by code: $e');
+      AppLogger.e('Error getting card by code', e);
       return null;
     }
   }
@@ -69,7 +70,7 @@ class CardService {
       }
       return null;
     } catch (e) {
-      print('Error creating card: $e');
+      AppLogger.e('Error creating card', e);
       return null;
     }
   }
@@ -100,7 +101,7 @@ class CardService {
       }
       return false;
     } catch (e) {
-      print('Error redeeming card: $e');
+      AppLogger.e('Error redeeming card', e);
       return false;
     }
   }
@@ -111,7 +112,7 @@ class CardService {
       // تطبيع الرقم أولاً
       final normalizedPhone = PhoneUtils.normalizePhone(userPhone);
       final canonicalPhone = _canonicalPhone(normalizedPhone);
-      print('Adding card ${card.id} (amount: ${card.amount}) to user: $canonicalPhone (from: $userPhone)');
+      AppLogger.d('Adding card ${card.id} (amount: ${card.amount}) to user: $canonicalPhone (from: $userPhone)');
       final userCards = await getUserCards(normalizedPhone);
       final userCard = UserCard(
         id: card.id,
@@ -122,9 +123,9 @@ class CardService {
       );
       userCards.add(userCard);
       await _saveUserCards(normalizedPhone, userCards);
-      print('Card added successfully. Total cards: ${userCards.length}, Total balance: ${userCards.fold<int>(0, (sum, c) => sum + c.amount)}');
+      AppLogger.d('Card added successfully. Total cards: ${userCards.length}, Total balance: ${userCards.fold<int>(0, (sum, c) => sum + c.amount)}');
     } catch (e) {
-      print('Error adding user card: $e');
+      AppLogger.e('Error adding user card', e);
     }
   }
 
@@ -138,10 +139,10 @@ class CardService {
       final json = jsonEncode(jsonList);
       final storageKey = '${_userCardsKey}_$canonicalPhone';
       await SecureStorageService.setString(storageKey, json);
-      print('Saved ${cards.length} cards for user: $canonicalPhone (storage key: $storageKey)');
-      print('Total balance saved: ${cards.fold<int>(0, (sum, card) => sum + card.amount)}');
+      AppLogger.d('Saved ${cards.length} cards for user: $canonicalPhone (storage key: $storageKey)');
+      AppLogger.d('Total balance saved: ${cards.fold<int>(0, (sum, card) => sum + card.amount)}');
     } catch (e) {
-      print('Error saving user cards: $e');
+      AppLogger.e('Error saving user cards', e);
     }
   }
 
@@ -152,9 +153,9 @@ class CardService {
       final normalizedPhone = PhoneUtils.normalizePhone(userPhone);
       final canonicalPhone = _canonicalPhone(normalizedPhone);
       
-      print('getUserCards called with phone: $userPhone');
-      print('Normalized to: $normalizedPhone');
-      print('Canonical: $canonicalPhone');
+      AppLogger.d('getUserCards called with phone: $userPhone');
+      AppLogger.d('Normalized to: $normalizedPhone');
+      AppLogger.d('Canonical: $canonicalPhone');
       
       // قراءة من التخزين المحلي أولاً
       // جرب عدة أشكال من المفاتيح للتأكد من التطابق
@@ -184,41 +185,39 @@ class CardService {
       // إزالة التكرارات
       final uniqueKeys = possibleKeys.toSet().toList();
       
-      print('Looking for cards in storage with keys:');
+      AppLogger.d('Looking for cards in storage with keys:');
       for (var key in uniqueKeys) {
-        print('  - $key');
+        AppLogger.d('  - $key');
       }
       
       // جرب جميع المفاتيح المحتملة
       String? data;
-      String? foundKey;
       for (var key in uniqueKeys) {
         data = await SecureStorageService.getString(key);
         if (data != null && data.isNotEmpty) {
-          foundKey = key;
-          print('Found data using key: $key');
+          AppLogger.d('Found data using key: $key');
           break;
         }
       }
       
       if (data != null && data.isNotEmpty) {
-        print('Found data in local storage, length: ${data.length}');
+        AppLogger.d('Found data in local storage, length: ${data.length}');
         try {
           final List<dynamic> jsonList = jsonDecode(data);
           final cards = jsonList
               .map((json) => UserCard.fromJson(json as Map<String, dynamic>))
               .toList();
-          print('Loaded ${cards.length} cards from local storage for phone: $canonicalPhone');
-          print('Total balance: ${cards.fold<int>(0, (sum, card) => sum + card.amount)}');
+          AppLogger.d('Loaded ${cards.length} cards from local storage for phone: $canonicalPhone');
+          AppLogger.d('Total balance: ${cards.fold<int>(0, (sum, card) => sum + card.amount)}');
           return cards;
         } catch (e) {
-          print('Error parsing local cards data: $e');
-          print('Data content: ${data.substring(0, data.length > 200 ? 200 : data.length)}...');
+          AppLogger.e('Error parsing local cards data', e);
+          AppLogger.d('Data content: ${data.substring(0, data.length > 200 ? 200 : data.length)}...');
           // إذا كان هناك خطأ في parsing، نعيد قائمة فارغة
           return [];
         }
       } else {
-        print('No data found in local storage for key: $storageKey');
+        AppLogger.d('No data found in local storage for key: $storageKey');
       }
 
       // إذا لم يوجد تخزين محلي نحاول الجلب من السيرفر (بطاقات مستخدمة لهذا الهاتف)
@@ -241,20 +240,20 @@ class CardService {
                   ))
               .toList();
           await _saveUserCards(canonicalPhone, userCards);
-          print('Loaded ${userCards.length} cards from server for phone: $canonicalPhone');
+          AppLogger.d('Loaded ${userCards.length} cards from server for phone: $canonicalPhone');
           return userCards;
         } else {
-          print('Server returned status ${response.statusCode} for cards/user/$canonicalPhone');
+          AppLogger.w('Server returned status ${response.statusCode} for cards/user/$canonicalPhone');
         }
       } catch (e) {
         // إذا فشل الطلب من السيرفر (مثل 404)، نطبع الخطأ لكن نعيد قائمة فارغة
         // لأن البيانات المحلية هي المصدر الأساسي
-        print('Error loading cards from server (this is OK if endpoint doesn\'t exist): $e');
+        AppLogger.d('Error loading cards from server (this is OK if endpoint doesn\'t exist)', e);
       }
     } catch (e) {
-      print('Error loading user cards: $e');
+      AppLogger.e('Error loading user cards', e);
     }
-    print('No cards found for phone: ${_canonicalPhone(userPhone)}');
+    AppLogger.d('No cards found for phone: ${_canonicalPhone(userPhone)}');
     return [];
   }
 
@@ -266,7 +265,7 @@ class CardService {
         return await getUserCards(userPhone);
       }
     } catch (e) {
-      print('Error getting current user cards: $e');
+      AppLogger.e('Error getting current user cards', e);
     }
     return [];
   }
@@ -304,7 +303,7 @@ class CardService {
       await _saveUserCards(normalizedPhone, userCards);
       return true;
     } catch (e) {
-      print('Error using card for payment: $e');
+      AppLogger.e('Error using card for payment', e);
       return false;
     }
   }
@@ -316,7 +315,7 @@ class CardService {
       final userCards = await getUserCards(normalizedPhone);
       return userCards.fold<int>(0, (int sum, UserCard card) => sum + card.amount);
     } catch (e) {
-      print('Error getting user cards total balance: $e');
+      AppLogger.e('Error getting user cards total balance', e);
       return 0;
     }
   }
@@ -329,7 +328,7 @@ class CardService {
         return await getUserCardsTotalBalance(userPhone);
       }
     } catch (e) {
-      print('Error getting current user cards total balance: $e');
+      AppLogger.e('Error getting current user cards total balance', e);
     }
     return 0;
   }
@@ -347,7 +346,7 @@ class CardService {
         'total25000': cards.where((card) => card.amount == 25000).length,
       };
     } catch (e) {
-      print('Error getting card statistics: $e');
+      AppLogger.e('Error getting card statistics', e);
       return {};
     }
   }
@@ -359,7 +358,7 @@ class CardService {
       final userCards = await getUserCards(normalizedPhone);
       
       if (userCards.isEmpty) {
-        print('No cards found for refund - creating new card entry');
+        AppLogger.d('No cards found for refund - creating new card entry');
         // إذا لم توجد بطاقات، نضيف بطاقة جديدة
         final newCard = UserCard(
           id: 'refund_${DateTime.now().millisecondsSinceEpoch}',
@@ -386,13 +385,13 @@ class CardService {
       if (cardIndex != -1) {
         userCards[cardIndex] = updatedCard;
         await _saveUserCards(_canonicalPhone(normalizedPhone), userCards);
-        print('Refunded $amount to wallet. New balance: ${updatedCard.amount}');
+        AppLogger.d('Refunded $amount to wallet. New balance: ${updatedCard.amount}');
         return true;
       }
       
       return false;
     } catch (e) {
-      print('Error refunding to wallet: $e');
+      AppLogger.e('Error refunding to wallet', e);
       return false;
     }
   }
@@ -405,7 +404,7 @@ class CardService {
       final cardIndex = userCards.indexWhere((card) => card.id == cardId);
       
       if (cardIndex == -1) {
-        print('Card not found for refund: $cardId');
+        AppLogger.w('Card not found for refund: $cardId');
         // إذا لم توجد البطاقة، نحاول استرجاعها للمحفظة عموماً
         return await refundToWallet(userPhone, amount);
       }
@@ -418,10 +417,10 @@ class CardService {
       
       userCards[cardIndex] = updatedCard;
       await _saveUserCards(_canonicalPhone(normalizedPhone), userCards);
-      print('Refunded $amount to card $cardId. New balance: ${updatedCard.amount}');
+      AppLogger.d('Refunded $amount to card $cardId. New balance: ${updatedCard.amount}');
       return true;
     } catch (e) {
-      print('Error refunding to card: $e');
+      AppLogger.e('Error refunding to card', e);
       return false;
     }
   }
@@ -432,25 +431,25 @@ class CardService {
       // تطبيع رقم الهاتف بنفس الطريقة المستخدمة في redeemCard
       final normalizedPhone = PhoneUtils.normalizePhone(userPhone);
       final canonicalPhone = _canonicalPhone(normalizedPhone);
-      print('Attempting to deduct $amount from wallet');
-      print('Original phone: $userPhone');
-      print('Normalized phone: $normalizedPhone');
-      print('Canonical phone: $canonicalPhone');
+      AppLogger.d('Attempting to deduct $amount from wallet');
+      AppLogger.d('Original phone: $userPhone');
+      AppLogger.d('Normalized phone: $normalizedPhone');
+      AppLogger.d('Canonical phone: $canonicalPhone');
       
       // تمرير الرقم المطبيع (normalized) وليس canonical لأن getUserCards يقوم بتطبيعه داخلياً
       final userCards = await getUserCards(normalizedPhone);
-      print('Found ${userCards.length} cards for user');
+      AppLogger.d('Found ${userCards.length} cards for user');
       
       if (userCards.isEmpty) {
-        print('No cards found for user - returning false');
+        AppLogger.w('No cards found for user - returning false');
         return false;
       }
       
       final totalBalance = userCards.fold<int>(0, (sum, card) => sum + card.amount);
-      print('Total wallet balance: $totalBalance, Required: $amount');
+      AppLogger.d('Total wallet balance: $totalBalance, Required: $amount');
       
       if (totalBalance < amount) {
-        print('Insufficient balance: $totalBalance < $amount');
+        AppLogger.w('Insufficient balance: $totalBalance < $amount');
         return false; // الرصيد غير كافٍ
       }
 
@@ -462,22 +461,22 @@ class CardService {
       for (final card in sortedCards) {
         if (remaining <= 0) break;
         final deduct = remaining <= card.amount ? remaining : card.amount;
-        print('Deducting $deduct from card ${card.id} (balance: ${card.amount})');
+        AppLogger.d('Deducting $deduct from card ${card.id} (balance: ${card.amount})');
         // استخدام normalizedPhone بدلاً من canonicalPhone
         final success = await useCardForPayment(normalizedPhone, card.id, deduct);
         if (!success) {
-          print('Failed to deduct from card ${card.id}');
+          AppLogger.w('Failed to deduct from card ${card.id}');
           continue;
         }
         remaining -= deduct;
-        print('Remaining amount to deduct: $remaining');
+        AppLogger.d('Remaining amount to deduct: $remaining');
       }
 
       final success = remaining <= 0;
-      print('Deduction ${success ? "succeeded" : "failed"}. Remaining: $remaining');
+      AppLogger.d('Deduction ${success ? "succeeded" : "failed"}. Remaining: $remaining');
       return success;
     } catch (e) {
-      print('Error in deductFromWallet: $e');
+      AppLogger.e('Error in deductFromWallet', e);
       return false;
     }
   }

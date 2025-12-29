@@ -182,7 +182,6 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
         }
       }
     } catch (e) {
-      print('Error calculating delivery fee: $e');
       // في حالة الخطأ، استخدم قيمة افتراضية
       if (mounted) {
         setState(() {
@@ -249,42 +248,31 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
           
           // استخدام الموقع الأقرب من مواقع السوبر ماركت (إذا كان هناك مواقع متعددة)
           if (nearestSupermarket.locations != null && nearestSupermarket.locations!.isNotEmpty) {
-            print('Using multiple locations, count: ${nearestSupermarket.locations!.length}');
             // استخدام الموقع الأقرب من مواقع السوبر ماركت
             final nearestLocation = nearestSupermarket.getNearestLocation(customerLat, customerLng);
             if (nearestLocation != null) {
-              print('Nearest location: ${nearestLocation.name}, lat: ${nearestLocation.latitude}, lng: ${nearestLocation.longitude}');
               calculatedDistance = DistanceCalculator.calculateDistance(
                 nearestLocation.latitude,
                 nearestLocation.longitude,
                 customerLat,
                 customerLng,
               );
-              print('Distance from nearest location: $calculatedDistance km');
-            } else {
-              print('No nearest location found');
             }
           } 
           // استخدام الموقع القديم (latitude, longitude) للتوافق مع الكود القديم
           else if (nearestSupermarket.latitude != null && nearestSupermarket.longitude != null) {
-            print('Using old location, lat: ${nearestSupermarket.latitude}, lng: ${nearestSupermarket.longitude}');
             calculatedDistance = DistanceCalculator.calculateDistance(
               nearestSupermarket.latitude!,
               nearestSupermarket.longitude!,
               customerLat,
               customerLng,
             );
-            print('Distance from old location: $calculatedDistance km');
-          } else {
-            print('No valid location found in supermarket');
           }
 
           if (calculatedDistance != null && calculatedDistance.isFinite) {
             _distanceToSupermarket = calculatedDistance;
             _deliveryFee = DeliveryFeeCalculator.calculateDeliveryFee(_distanceToSupermarket!);
-            print('Delivery fee calculated: $_deliveryFee IQD for distance: $_distanceToSupermarket km');
           } else {
-            print('Invalid distance, using default fee');
             _distanceToSupermarket = null;
             _deliveryFee = 1000; // Default minimum fee
           }

@@ -233,7 +233,7 @@ class OrderProvider with ChangeNotifier {
                 _orders.firstWhere((o) => o.id == orderId);
       } catch (e) {
         // إذا لم يُوجد في القائمة المحلية، سيتم الحصول عليه من orderService
-        print('Order not found in local list, will fetch from service');
+        // Order not found in local list, will fetch from service
       }
       
       // إذا لم يُوجد محلياً، سيتم الحصول عليه من orderService.cancelOrder

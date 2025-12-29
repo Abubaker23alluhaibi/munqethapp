@@ -80,32 +80,20 @@ class _DriverOrderDetailsScreenState extends State<DriverOrderDetailsScreen> {
       Order? order;
       try {
         final allOrders = await _orderService.getAllOrdersForDriver();
-        print('🔍 Looking for order with ID: ${widget.orderId}');
-        print('📋 Total orders loaded: ${allOrders.length}');
-        if (allOrders.isNotEmpty) {
-          print('📋 First order ID: ${allOrders.first.id}');
-        }
         try {
           order = allOrders.firstWhere((o) => o.id == widget.orderId);
-          print('✅ Order found: ${order.id}');
         } catch (e) {
           // إذا لم يُوجد في القائمة، محاولة مرة أخرى بعد قليل (في حالة التحديث)
-          print('⚠️ Order not found in first attempt, retrying...');
-          print('🔍 Searching for: ${widget.orderId}');
-          print('📋 Available IDs: ${allOrders.map((o) => o.id).join(", ")}');
           await Future.delayed(const Duration(milliseconds: 500));
           final retryOrders = await _orderService.getAllOrdersForDriver();
           try {
             order = retryOrders.firstWhere((o) => o.id == widget.orderId);
-            print('✅ Order found on retry: ${order.id}');
           } catch (e2) {
-            print('❌ Order still not found after retry: $e2');
-            print('🔍 Retry search for: ${widget.orderId}');
-            print('📋 Retry available IDs: ${retryOrders.map((o) => o.id).join(", ")}');
+            // Order not found
           }
         }
       } catch (e) {
-        print('❌ Error loading orders: $e');
+        // Error loading orders
       }
       
       if (order == null) {
@@ -687,7 +675,7 @@ class _DriverOrderDetailsScreenState extends State<DriverOrderDetailsScreen> {
         }
       },
       onError: (error) {
-        print('Error getting location: $error');
+        // Error getting location
       },
     );
 
@@ -1801,7 +1789,7 @@ class _DriverOrderDetailsScreenState extends State<DriverOrderDetailsScreen> {
         CameraUpdate.newLatLngZoom(centerPoint, zoom),
       );
     } catch (e) {
-      print('Error updating camera: $e');
+      // Error updating camera
     }
   }
 

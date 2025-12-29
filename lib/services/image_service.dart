@@ -12,12 +12,10 @@ class ImageService {
     try {
       // التحقق من وجود الملف
       if (!await imageFile.exists()) {
-        print('Image file does not exist: ${imageFile.path}');
         return null;
       }
 
       final fileName = imageFile.path.split('/').last;
-      print('Uploading image: $fileName');
       
       // إنشاء FormData
       final formData = FormData.fromMap({
@@ -34,25 +32,15 @@ class ImageService {
         data: formData,
       );
 
-      print('Image upload response status: ${response.statusCode}');
-      print('Image upload response data: ${response.data}');
-
       if (response.statusCode == 200 && response.data != null) {
         final imageUrl = response.data['url'] as String?;
         if (imageUrl != null && imageUrl.isNotEmpty) {
-          print('Image uploaded successfully: $imageUrl');
           return imageUrl;
-        } else {
-          print('Image URL is null or empty in response');
         }
-      } else {
-        print('Failed to upload image: Status ${response.statusCode}');
       }
       
       return null;
     } catch (e, stackTrace) {
-      print('Error uploading image: $e');
-      print('Stack trace: $stackTrace');
       return null;
     }
   }
@@ -93,7 +81,6 @@ class ImageService {
       
       return [];
     } catch (e) {
-      print('Error uploading multiple images: $e');
       return [];
     }
   }
