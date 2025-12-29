@@ -3,14 +3,14 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:async';
 import '../config/theme.dart';
 import '../widgets/shimmer_widget.dart';
 import '../models/advertisement.dart';
 import '../services/advertisement_service.dart';
 import '../services/storage_service.dart';
-import '../services/notification_service.dart';
+import '../services/local_notification_service.dart';
+import '../services/socket_service.dart';
 import '../core/utils/app_logger.dart';
 import 'shopping/shopping_screen.dart';
 import 'services/services_screen.dart';
@@ -26,8 +26,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  StreamSubscription<RemoteMessage>? _notificationSubscription;
-  final _notificationService = NotificationService();
+  final _notificationService = LocalNotificationService();
+  final _socketService = SocketService();
 
   final List<Widget> _screens = [
     const HomeContent(),
@@ -40,82 +40,19 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    _setupNotificationListener();
+    // SocketService يتعامل مع الإشعارات تلقائياً
+    _ensureSocketConnected();
   }
 
   @override
   void dispose() {
-    _notificationSubscription?.cancel();
     super.dispose();
   }
 
-  void _setupNotificationListener() {
-    // الاستماع للإشعارات عند وصولها (التطبيق مفتوح)
-    _notificationSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      AppLogger.i('Notification received in main screen: ${message.messageId}');
-      AppLogger.d('Notification data: ${message.data}');
-      
-      final data = message.data;
-      
-      // إشعار قبول الطلب من السائق
-      if (data['type'] == 'driver_accepted' || data['type'] == 'order_accepted') {
-        final orderId = data['orderId'];
-        if (orderId != null) {
-          // عرض إشعار محلي
-          _notificationService.showLocalNotification(
-            title: message.notification?.title ?? 'تم قبول الطلب',
-            body: message.notification?.body ?? 'تم قبول طلبك من قبل سائق',
-            data: data,
-          );
-          
-          // الانتقال لصفحة تتبع الطلب عند النقر
-          // سيتم التعامل معه في NotificationService
-        }
-      }
-      
-      // إشعار "السائق في الطريق"
-      if (data['type'] == 'driver_on_way' || data['type'] == 'on_the_way') {
-        final orderId = data['orderId'];
-        if (orderId != null) {
-          _notificationService.showLocalNotification(
-            title: message.notification?.title ?? 'السائق في الطريق',
-            body: message.notification?.body ?? 'السائق في الطريق إليك',
-            data: data,
-          );
-        }
-      }
-      
-      // إشعار تحديث حالة الطلب
-      if (data['type'] == 'order_update') {
-        final orderId = data['orderId'];
-        if (orderId != null) {
-          _notificationService.showLocalNotification(
-            title: message.notification?.title ?? 'تحديث الطلب',
-            body: message.notification?.body ?? 'تم تحديث حالة طلبك',
-            data: data,
-          );
-        }
-      }
-    });
-
-    // الاستماع عند فتح الإشعار
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _handleNotificationTap(message);
-    });
-  }
-
-  void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
-    if (data['type'] == 'driver_accepted' || 
-        data['type'] == 'order_accepted' || 
-        data['type'] == 'driver_on_way' ||
-        data['type'] == 'on_the_way' ||
-        data['type'] == 'order_update') {
-      final orderId = data['orderId'];
-      if (orderId != null && mounted) {
-        // الانتقال لصفحة تتبع الطلب
-        context.push('/orders/tracking/$orderId');
-      }
+  void _ensureSocketConnected() {
+    // التأكد من اتصال Socket.IO
+    if (!_socketService.isConnected) {
+      _socketService.connect();
     }
   }
 

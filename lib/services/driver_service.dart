@@ -260,6 +260,7 @@ class DriverService {
       AppLogger.i('   FCM Token: ${fcmToken.substring(0, 30)}...');
       AppLogger.i('   Token Length: ${fcmToken.length}');
       AppLogger.i('   Endpoint: PUT /drivers/driverId/$driverId/fcm-token');
+      AppLogger.i('   Request Body: {"fcmToken": "${fcmToken.substring(0, 30)}..."}');
       
       final response = await _apiService.put('/drivers/driverId/$driverId/fcm-token', data: {
         'fcmToken': fcmToken,
@@ -270,6 +271,7 @@ class DriverService {
       
       if (response.statusCode == 200) {
         AppLogger.i('✅✅✅ FCM token updated successfully for driver: $driverId');
+        AppLogger.i('   ✅✅✅ Token has been saved to MongoDB database');
         // تحديث البيانات المحلية إذا كان هذا السائق هو المسجل دخوله
         final currentDriver = await getCurrentDriver();
         if (currentDriver != null && currentDriver.driverId == driverId.toUpperCase()) {
@@ -279,12 +281,14 @@ class DriverService {
         }
         return true;
       } else {
-        AppLogger.w('Failed to update FCM token: status ${response.statusCode}');
-        AppLogger.d('Response data: ${response.data}');
+        AppLogger.w('❌ Failed to update FCM token: status ${response.statusCode}');
+        AppLogger.w('   Response data: ${response.data}');
         return false;
       }
     } catch (e, stackTrace) {
-      AppLogger.e('Error updating FCM token for driver ID: $driverId', e, stackTrace);
+      AppLogger.e('❌❌❌ Error updating FCM token for driver ID: $driverId', e, stackTrace);
+      AppLogger.e('   Error type: ${e.runtimeType}');
+      AppLogger.e('   Error message: ${e.toString()}');
       return false;
     }
   }

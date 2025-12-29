@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:async';
 import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../models/driver.dart';
 import '../../services/driver_service.dart';
 import '../../services/order_service.dart';
-import '../../services/notification_service.dart';
+import '../../services/local_notification_service.dart';
+import '../../services/socket_service.dart';
 import '../../core/utils/app_logger.dart';
 
 class DriverOrdersScreen extends StatefulWidget {
@@ -20,13 +20,13 @@ class DriverOrdersScreen extends StatefulWidget {
 class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
   final _driverService = DriverService();
   final _orderService = OrderService();
-  final _notificationService = NotificationService();
+  final _notificationService = LocalNotificationService();
+  final _socketService = SocketService();
 
   Driver? _driver;
   List<Order> _availableOrders = [];
   bool _isLoading = true;
   Map<String, DateTime> _orderTimers = {}; // لتتبع وقت ظهور الطلب
-  StreamSubscription<RemoteMessage>? _notificationSubscription;
   Timer? _timer; // Timer لتحديث الوقت المتبقي كل ثانية
   ValueNotifier<int> _timerNotifier = ValueNotifier<int>(0); // لتحديث الـ UI كل ثانية
 
@@ -50,7 +50,6 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
 
   @override
   void dispose() {
-    _notificationSubscription?.cancel();
     _timer?.cancel();
     _timerNotifier.dispose(); // Dispose the ValueNotifier
     super.dispose();
@@ -72,39 +71,13 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
   }
 
   void _setupNotificationListener() {
-    // الاستماع للإشعارات عند وصولها (التطبيق مفتوح)
-    _notificationSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      AppLogger.i('Notification received in orders screen: ${message.messageId}');
-      AppLogger.d('Notification data: ${message.data}');
-      
-      final data = message.data;
-      if (data['type'] == 'new_order') {
-        AppLogger.i('New order notification received, refreshing orders list');
-        // تحديث الطلبات عند وصول إشعار طلب جديد
+    // SocketService يتعامل مع الإشعارات تلقائياً
+    // نستمع فقط لتحديثات الطلبات عبر Socket.IO
+    if (_socketService.socket != null) {
+      _socketService.socket!.on('order:new', (data) {
+        AppLogger.i('New order received via Socket.IO, refreshing orders list');
         _loadData();
-        
-        // عرض إشعار محلي
-        _notificationService.showLocalNotification(
-          title: message.notification?.title ?? 'طلب جديد',
-          body: message.notification?.body ?? 'يوجد طلب جديد متاح',
-          data: data,
-        );
-      }
-    });
-
-    // الاستماع عند فتح الإشعار
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _handleNotificationTap(message);
-    });
-  }
-
-  void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
-    if (data['type'] == 'new_order' && data['orderId'] != null) {
-      // الانتقال لصفحة تفاصيل الطلب
-      context.push('/driver/order-details', extra: data['orderId']);
-      // تحديث الطلبات
-      _loadData();
+      });
     }
   }
 

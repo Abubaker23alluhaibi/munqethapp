@@ -7,7 +7,8 @@ import '../services/admin_service.dart';
 import '../services/driver_service.dart';
 import '../services/supermarket_service.dart';
 import '../services/user_service.dart';
-import '../services/notification_service.dart';
+// import '../services/notification_service.dart'; // لا حاجة لـ Firebase
+import '../services/socket_service.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../core/utils/app_logger.dart';
 
@@ -78,13 +79,16 @@ class AuthProvider with ChangeNotifier {
         _driver = driver;
         await SecureStorageService.setUserId(driver.id);
         await SecureStorageService.setUserCode(driver.code);
+        // حفظ driver_id للاستخدام في onTokenRefresh
+        await SecureStorageService.setString('driver_id', driver.driverId);
         
         _setLoading(false);
         notifyListeners();
         
-        // إرسال FCM token إلى السيرفر (بعد إشعار المستمعين لتجنب التأخير)
-        AppLogger.d('📤 Calling _sendFcmTokenToServer for driver: ${driver.driverId}');
-        _sendFcmTokenToServer(driverId: driver.driverId);
+      // Socket.IO connection - السائق يشارك في room
+      final socketService = SocketService();
+      socketService.connect();
+      socketService.joinDriverRoom(driver.driverId);
         
         return true;
       } else {
@@ -155,9 +159,9 @@ class AuthProvider with ChangeNotifier {
       _setLoading(false);
       notifyListeners();
       
-      // إرسال FCM token إلى السيرفر (بعد إشعار المستمعين لتجنب التأخير)
-      AppLogger.d('📤 Calling _sendFcmTokenToServer for user: ${user.id}, phone: $phone');
-      _sendFcmTokenToServer(userId: user.id, phone: phone);
+      // Socket.IO connection - المستخدم يشارك في room للطلبات
+      final socketService = SocketService();
+      socketService.connect();
       
       return true;
     } catch (e) {
@@ -268,16 +272,9 @@ class AuthProvider with ChangeNotifier {
       }
 
       if (isDriverLoggedIn) {
-        loadFutures.add(_driverService.getCurrentDriver().then((driver) {
+        loadFutures.add(_driverService.getCurrentDriver().then((driver) async {
           _driver = driver;
-          // إرسال FCM token تلقائياً للسائق المسجل دخول (في الخلفية)
-          if (_driver != null) {
-            _sendFcmTokenToServer(driverId: _driver!.driverId);
-            Future.delayed(const Duration(seconds: 10), () {
-              final notificationService = NotificationService();
-              notificationService.retrySendingFcmToken(driverId: _driver!.driverId);
-            });
-          }
+          // Socket.IO handles notifications - no FCM token needed
         }));
       }
 
@@ -289,22 +286,20 @@ class AuthProvider with ChangeNotifier {
 
       if (userLoggedIn) {
         _isUserLoggedIn = true;
-        loadFutures.add(loadCurrentUser().then((_) {
-          // إرسال FCM token تلقائياً للمستخدم المسجل دخول (في الخلفية)
-          if (_currentUser != null) {
-            SecureStorageService.getString('user_phone').then((phone) {
-              _sendFcmTokenToServer(userId: _currentUser!.id, phone: phone);
-              Future.delayed(const Duration(seconds: 10), () {
-                final notificationService = NotificationService();
-                notificationService.retrySendingFcmToken(userId: _currentUser!.id, phone: phone);
-              });
-            });
-          }
+        loadFutures.add(loadCurrentUser().then((_) async {
+          // Socket.IO handles notifications - no FCM token needed
         }));
       }
 
       // انتظار تحميل جميع البيانات
       await Future.wait(loadFutures);
+      
+      // Socket.IO connection for logged in users/drivers
+      final socketService = SocketService();
+      socketService.connect();
+      if (_driver != null) {
+        socketService.joinDriverRoom(_driver!.driverId);
+      }
 
       _setLoading(false);
       notifyListeners();
@@ -342,39 +337,21 @@ class AuthProvider with ChangeNotifier {
   }
 
   /// التأكد من تسجيل FCM token للمستخدم/السائق المسجل دخول (للاستخدام عند فتح التطبيق)
+  // لا حاجة لـ FCM tokens - نستخدم Socket.IO الآن
   Future<void> ensureFcmTokenRegistered() async {
-    AppLogger.i('🔄 ensureFcmTokenRegistered called - checking for logged in users/drivers...');
-    
-    try {
-      // التحقق من السائق
-      if (_driver != null) {
-        AppLogger.d('📱 Driver is logged in, ensuring FCM token is registered...');
-        _sendFcmTokenToServer(driverId: _driver!.driverId);
-        
-        // إعادة محاولة إضافية بعد 5 ثوانٍ
-        Future.delayed(const Duration(seconds: 5), () {
-          _sendFcmTokenToServer(driverId: _driver!.driverId);
-        });
-      }
-      
-      // التحقق من المستخدم
-      if (_currentUser != null && _isUserLoggedIn) {
-        final phone = await SecureStorageService.getString('user_phone');
-        AppLogger.d('📱 User is logged in, ensuring FCM token is registered...');
-        _sendFcmTokenToServer(userId: _currentUser!.id, phone: phone);
-        
-        // إعادة محاولة إضافية بعد 5 ثوانٍ
-        Future.delayed(const Duration(seconds: 5), () {
-          _sendFcmTokenToServer(userId: _currentUser!.id, phone: phone);
-        });
-      }
-    } catch (e) {
-      AppLogger.e('❌ Error in ensureFcmTokenRegistered', e);
+    AppLogger.d('ensureFcmTokenRegistered called - Socket.IO handles notifications');
+    // Socket.IO connection handled in main.dart
+    final socketService = SocketService();
+    if (!socketService.isConnected) {
+      socketService.connect();
+    }
+    if (_driver != null) {
+      socketService.joinDriverRoom(_driver!.driverId);
     }
   }
 
-  /// إرسال FCM token إلى السيرفر بعد تسجيل الدخول
-  void _sendFcmTokenToServer({String? userId, String? phone, String? driverId}) {
+  /* تعليق - لا حاجة لـ FCM tokens
+  void _sendFcmTokenToServer_OLD({String? userId, String? phone, String? driverId}) {
     AppLogger.i('🔄 _sendFcmTokenToServer called - userId: $userId, phone: $phone, driverId: $driverId');
     
     // إرسال FCM token بشكل غير متزامن (لا ننتظر النتيجة)
@@ -397,8 +374,7 @@ class AuthProvider with ChangeNotifier {
     });
   }
   
-  /// محاولة إرسال FCM token
-  Future<void> _attemptSendFcmToken({String? userId, String? phone, String? driverId, bool isRetry = false}) async {
+  Future<void> _attemptSendFcmToken_OLD({String? userId, String? phone, String? driverId, bool isRetry = false}) async {
     if (isRetry) {
       AppLogger.d('⏰ Retrying FCM token send after delay...');
     } else {
@@ -414,71 +390,115 @@ class AuthProvider with ChangeNotifier {
       // التأكد من أن NotificationService مهيأ
       if (!notificationService.isInitialized) {
         AppLogger.w('⚠️ NotificationService not initialized, initializing now...');
-        await notificationService.initialize();
-        AppLogger.d('✅ NotificationService initialized');
+        try {
+          await notificationService.initialize();
+          AppLogger.d('✅ NotificationService initialized');
+          // انتظار قصير بعد التهيئة لضمان استقرار الخدمة
+          await Future.delayed(const Duration(seconds: 2));
+        } catch (e) {
+          AppLogger.e('❌ Failed to initialize NotificationService', e);
+          // استمر في المحاولة - قد يكون هناك token محفوظ
+        }
       }
       
       // التحقق من FCM token - محاولة متعددة
-      int tokenRetries = isRetry ? 5 : 10; // زيادة عدد المحاولات
-      while (tokenRetries > 0 && (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty)) {
-        AppLogger.w('⚠️ FCM token is null, retrying... ($tokenRetries retries left)');
-        
-        // إعادة تهيئة NotificationService
-        if (!notificationService.isInitialized) {
-          AppLogger.d('   Re-initializing NotificationService...');
-          await notificationService.initialize();
-          await Future.delayed(const Duration(seconds: 2));
+      // أولاً: محاولة الحصول على token محفوظ (الأسرع والأكثر موثوقية)
+      try {
+        final savedToken = await SecureStorageService.getString('fcm_token');
+        if (savedToken != null && savedToken.isNotEmpty) {
+          AppLogger.i('✅✅✅ Found saved FCM token, using it: ${savedToken.substring(0, 30)}...');
+          AppLogger.i('   Token length: ${savedToken.length} characters');
+          // تحديث notificationService بالـ token المحفوظ مباشرة
+          await notificationService.setFcmToken(savedToken);
+          // Token جاهز الآن - لا نحتاج لمزيد من المحاولات
+        } else {
+          AppLogger.w('   No saved token found in storage, will try to get new one');
         }
-        
-        // محاولة الحصول على token من storage أولاً
-        try {
-          final savedToken = await SecureStorageService.getString('fcm_token');
-          if (savedToken != null && savedToken.isNotEmpty) {
-            AppLogger.i('✅ Found saved FCM token, using it: ${savedToken.substring(0, 30)}...');
-            // تحديث notificationService بالـ token المحفوظ
-            await notificationService.refreshFcmToken();
-            break;
+      } catch (e) {
+        AppLogger.w('   Error getting saved token: $e');
+      }
+      
+      // إذا لم يكن هناك token محفوظ، حاول الحصول على واحد جديد
+      if (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty) {
+        int tokenRetries = isRetry ? 3 : 5; // تقليل عدد المحاولات
+        while (tokenRetries > 0 && (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty)) {
+          AppLogger.w('⚠️ FCM token is null, retrying... ($tokenRetries retries left)');
+          
+          // إعادة تهيئة NotificationService إذا لزم الأمر
+          if (!notificationService.isInitialized) {
+            AppLogger.d('   Re-initializing NotificationService...');
+            try {
+              await notificationService.initialize();
+              await Future.delayed(const Duration(seconds: 2));
+            } catch (e) {
+              AppLogger.w('   Failed to re-initialize: $e');
+            }
           }
-        } catch (e) {
-          AppLogger.w('   No saved token found: $e');
-        }
-        
-        // محاولة الحصول على token جديد من Firebase
-        try {
-          final token = await notificationService.firebaseMessaging.getToken()
-              .timeout(const Duration(seconds: 10), onTimeout: () {
-            AppLogger.w('   Timeout getting FCM token');
-            return null;
-          });
-          if (token != null && token.isNotEmpty) {
-            AppLogger.i('✅ Got FCM token: ${token.substring(0, 30)}...');
-            await SecureStorageService.setString('fcm_token', token);
-            // تحديث notificationService
-            await notificationService.refreshFcmToken();
-            break;
+          
+          // محاولة الحصول على token جديد من Firebase
+          try {
+            AppLogger.d('   Attempting to get new FCM token from Firebase...');
+            final token = await notificationService.firebaseMessaging.getToken()
+                .timeout(const Duration(seconds: 10), onTimeout: () {
+              AppLogger.w('   Timeout getting FCM token');
+              return null;
+            });
+            if (token != null && token.isNotEmpty) {
+              AppLogger.i('✅ Got new FCM token: ${token.substring(0, 30)}...');
+              await SecureStorageService.setString('fcm_token', token);
+              // تحديث notificationService
+              await notificationService.setFcmToken(token);
+              break;
+            } else {
+              AppLogger.w('   Got null/empty token from Firebase');
+            }
+          } catch (retryError) {
+            AppLogger.w('   Failed to get FCM token from Firebase: $retryError');
+            // إذا كان الخطأ FIS_AUTH_ERROR، استخدم الـ token المحفوظ إذا كان موجوداً
+            if (retryError.toString().contains('FIS_AUTH_ERROR')) {
+              AppLogger.w('   FIS_AUTH_ERROR detected - will use saved token if available');
+              final savedToken = await SecureStorageService.getString('fcm_token');
+              if (savedToken != null && savedToken.isNotEmpty) {
+                AppLogger.i('   Using saved token due to FIS_AUTH_ERROR: ${savedToken.substring(0, 30)}...');
+                await notificationService.setFcmToken(savedToken);
+                break;
+              }
+            }
           }
-        } catch (retryError) {
-          AppLogger.w('   Failed to get FCM token: $retryError');
-        }
-        
-        tokenRetries--;
-        if (tokenRetries > 0) {
-          await Future.delayed(const Duration(seconds: 2));
+          
+          tokenRetries--;
+          if (tokenRetries > 0) {
+            await Future.delayed(const Duration(seconds: 2));
+          }
         }
       }
       
-      // التحقق النهائي
+      // التحقق النهائي - محاولة أخيرة باستخدام الـ token المحفوظ
       if (notificationService.fcmToken == null || notificationService.fcmToken!.isEmpty) {
-        if (!isRetry) {
-          // في المحاولة الأولى فقط نطبع رسالة خطأ مفصلة
-          AppLogger.e('❌ FCM token is still null after all retries');
-          AppLogger.e('   This means Firebase is not properly configured or permissions are not granted');
-          AppLogger.e('   Please check:');
-          AppLogger.e('   1. google-services.json is in android/app/');
-          AppLogger.e('   2. SHA fingerprint is added in Firebase Console');
-          AppLogger.e('   3. Notification permissions are granted');
+        // محاولة أخيرة - استخدام الـ token المحفوظ في Storage
+        try {
+          final lastSavedToken = await SecureStorageService.getString('fcm_token');
+          if (lastSavedToken != null && lastSavedToken.isNotEmpty) {
+            AppLogger.w('⚠️⚠️⚠️ Using saved FCM token as last resort: ${lastSavedToken.substring(0, 30)}...');
+            notificationService.setFcmToken(lastSavedToken);
+            AppLogger.i('✅ FCM token set from storage - will attempt to send to server');
+          } else {
+            if (!isRetry) {
+              // في المحاولة الأولى فقط نطبع رسالة خطأ مفصلة
+              AppLogger.e('❌ FCM token is still null after all retries');
+              AppLogger.e('   This means Firebase is not properly configured or permissions are not granted');
+              AppLogger.e('   Please check:');
+              AppLogger.e('   1. google-services.json is in android/app/');
+              AppLogger.e('   2. SHA fingerprint is added in Firebase Console');
+              AppLogger.e('   3. Notification permissions are granted');
+              AppLogger.e('   4. FIS_AUTH_ERROR indicates Firebase configuration issue');
+            }
+            return;
+          }
+        } catch (e) {
+          AppLogger.e('❌ Failed to get saved token as last resort: $e');
+          return;
         }
-        return;
       }
       
       AppLogger.d('✅ FCM token is available: ${notificationService.fcmToken!.substring(0, 30)}...');
@@ -555,6 +575,93 @@ class AuthProvider with ChangeNotifier {
       AppLogger.e('❌ Critical error in _attemptSendFcmToken', error, stackTrace);
     }
   }
+  
+  /*
+  Future<void> _tryUseSavedFcmToken_OLD({String? userId, String? phone, String? driverId}) async {
+    try {
+      // أولاً: التحقق من وجود FCM token محفوظ محلياً
+      String? savedToken = await SecureStorageService.getString('fcm_token');
+      
+      // ثانياً: إذا لم يكن موجوداً محلياً، جربه من Backend
+      if ((savedToken == null || savedToken.isEmpty) && (driverId != null || phone != null)) {
+        AppLogger.i('💾 No local FCM token found, trying to get from backend...');
+        savedToken = await _getFcmTokenFromBackend(driverId: driverId, phone: phone);
+      }
+      
+      if (savedToken != null && savedToken.isNotEmpty) {
+        AppLogger.i('💾 Found FCM token (${savedToken.substring(0, 30)}...)');
+        
+        // استخدام NotificationService لإدخال Token
+        final notificationService = NotificationService();
+        if (!notificationService.isInitialized) {
+          await notificationService.initialize();
+        }
+        
+        // إدخال Token يدوياً
+        await notificationService.setFcmToken(savedToken);
+        
+        // محاولة إرساله للسيرفر مباشرة
+        AppLogger.i('📤 Attempting to send FCM token to server...');
+        final success = await notificationService.sendFcmTokenToServer(userId, phone, driverId: driverId);
+        
+        if (success) {
+          AppLogger.i('✅✅✅ FCM token sent successfully to server');
+          if (driverId != null) {
+            AppLogger.i('   Driver ID: $driverId');
+          } else if (phone != null) {
+            AppLogger.i('   User phone: $phone');
+          } else if (userId != null) {
+            AppLogger.i('   User ID: $userId');
+          }
+        } else {
+          AppLogger.w('⚠️ Failed to send FCM token - will retry automatically');
+        }
+      } else {
+        AppLogger.d('   No FCM token found (local or backend)');
+      }
+    } catch (e, stackTrace) {
+      AppLogger.e('❌ Error trying to use saved FCM token', e, stackTrace);
+      // لا نرمي خطأ هنا - سنحاول الحصول على token جديد
+    }
+  }
+  
+  */
+  // _getFcmTokenFromBackend removed - using Socket.IO instead
+  /*
+  Future<String?> _getFcmTokenFromBackend_OLD({String? driverId, String? phone}) async {
+    try {
+      if (driverId != null) {
+        AppLogger.d('🔍 Fetching FCM token from backend for driver: $driverId');
+        final driver = await _driverService.getDriverById(driverId);
+        if (driver != null && driver.fcmToken != null && driver.fcmToken!.isNotEmpty) {
+          // fcmToken في Driver model هو String? (ليس array في Flutter model)
+          final tokenStr = driver.fcmToken!;
+          AppLogger.i('✅ Found FCM token in backend for driver $driverId');
+          // حفظه محلياً للاستخدام المستقبلي
+          await SecureStorageService.setString('fcm_token', tokenStr);
+          return tokenStr;
+        }
+      } else if (phone != null) {
+        AppLogger.d('🔍 Fetching FCM token from backend for user: $phone');
+        final user = await _userService.getUserByPhone(phone);
+        if (user != null && user.fcmToken != null && user.fcmToken!.isNotEmpty) {
+          // fcmToken في User model هو String? (ليس array في Flutter model)
+          final tokenStr = user.fcmToken!;
+          AppLogger.i('✅ Found FCM token in backend for user $phone');
+          // حفظه محلياً للاستخدام المستقبلي
+          await SecureStorageService.setString('fcm_token', tokenStr);
+          return tokenStr;
+        }
+      }
+      AppLogger.d('   No FCM token found in backend');
+      return null;
+    } catch (e, stackTrace) {
+      AppLogger.e('❌ Error fetching FCM token from backend', e, stackTrace);
+      return null;
+    }
+  }
+  */
+  */
 }
 
 

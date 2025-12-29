@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:async';
 import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../models/driver.dart';
 import '../../providers/order_provider.dart';
 import '../../services/driver_service.dart';
-import '../../services/notification_service.dart';
+import '../../services/local_notification_service.dart';
+import '../../services/socket_service.dart';
 import '../../widgets/empty_state.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
@@ -28,9 +28,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   GoogleMapController? _mapController;
   Driver? _driver;
   bool _isLoading = true;
-  StreamSubscription<RemoteMessage>? _notificationSubscription;
   Timer? _updateTimer;
-  final _notificationService = NotificationService();
+  final _notificationService = LocalNotificationService();
+  final _socketService = SocketService();
 
   @override
   void initState() {
@@ -43,7 +43,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   @override
   void dispose() {
-    _notificationSubscription?.cancel();
     _updateTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
@@ -58,53 +57,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   void _setupNotificationListener() {
-    // الاستماع للإشعارات عند وصولها
-    _notificationSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      final data = message.data;
-      if (data['type'] == 'order_update' && data['orderId'] == widget.orderId) {
-        // تحديث بيانات الطلب عند وصول إشعار
-        _loadOrderData();
-        
-        // عرض إشعار محلي
-        _notificationService.showLocalNotification(
-          title: message.notification?.title ?? 'تحديث الطلب',
-          body: message.notification?.body ?? 'تم تحديث حالة طلبك',
-          data: data,
-        );
-      } else if (data['type'] == 'driver_accepted' && data['orderId'] == widget.orderId) {
-        // إشعار موافقة السائق
-        _loadOrderData();
-        _notificationService.showLocalNotification(
-          title: message.notification?.title ?? 'تم قبول الطلب',
-          body: message.notification?.body ?? 'تم قبول طلبك من قبل سائق',
-          data: data,
-        );
-      } else if (data['type'] == 'driver_on_way' && data['orderId'] == widget.orderId) {
-        // إشعار "في الطريق إليك"
-        _loadOrderData();
-        _notificationService.showLocalNotification(
-          title: message.notification?.title ?? 'السائق في الطريق',
-          body: message.notification?.body ?? 'السائق في الطريق إليك',
-          data: data,
-        );
-      } else if (data['type'] == 'driver_approaching' && data['orderId'] == widget.orderId) {
-        // إشعار اقتراب السائق
-        _loadOrderData();
-        _notificationService.showLocalNotification(
-          title: message.notification?.title ?? 'اقترب السائق',
-          body: message.notification?.body ?? 'السائق في طريقه إليك الآن',
-          data: data,
-        );
-      } else if (data['type'] == 'order_cancelled' && data['orderId'] == widget.orderId) {
-        // إشعار إلغاء الطلب
-        _loadOrderData();
-        _notificationService.showLocalNotification(
-          title: message.notification?.title ?? 'تم إلغاء الطلب',
-          body: message.notification?.body ?? 'تم إلغاء طلبك',
-          data: data,
-        );
-      }
-    });
+    // SocketService يتعامل مع الإشعارات تلقائياً
+    // نستمع فقط لتحديثات حالة الطلب عبر Socket.IO
+    if (_socketService.socket != null) {
+      _socketService.joinOrderRoom(widget.orderId);
+      _socketService.socket!.on('order:status:updated', (data) {
+        if (data is Map && data['orderId'] == widget.orderId) {
+          _loadOrderData();
+        }
+      });
+    }
   }
 
   Future<void> _loadOrderData() async {
