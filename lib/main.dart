@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'config/routes.dart';
 import 'config/theme.dart';
 import 'services/storage_service.dart';
 import 'services/local_notification_service.dart';
+import 'services/firebase_messaging_service.dart';
 import 'services/socket_service.dart';
 import 'providers/app_providers.dart';
 import 'providers/auth_provider.dart';
@@ -12,20 +14,36 @@ import 'core/utils/app_logger.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // تهيئة Firebase (يجب أن تكون أولاً قبل أي استخدام لـ Firebase)
+  try {
+    await Firebase.initializeApp();
+    AppLogger.i('✅ Firebase initialized');
+  } catch (e) {
+    AppLogger.e('❌ Error initializing Firebase', e);
+    // يمكن المتابعة بدون Firebase إذا لم يكن متوفراً
+  }
+  
   // تهيئة Storage (سريع)
   await StorageService.init();
   
   // تشغيل التطبيق فوراً
   runApp(const MyApp());
   
-  // تهيئة Local Notifications (بدون Firebase)
+  // تهيئة Firebase Messaging (للإشعارات الخارجية - عندما يكون التطبيق مغلق)
+  FirebaseMessagingService().initialize().then((_) {
+    AppLogger.i('✅ FirebaseMessagingService initialized');
+  }).catchError((error) {
+    AppLogger.e('❌ Error initializing FirebaseMessagingService', error);
+  });
+  
+  // تهيئة Local Notifications (للإشعارات المحلية - عندما يكون التطبيق مفتوح)
   LocalNotificationService().initialize().then((_) {
     AppLogger.i('✅ LocalNotificationService initialized');
   }).catchError((error) {
     AppLogger.e('❌ Error initializing LocalNotificationService', error);
   });
   
-  // الاتصال بـ Socket.IO
+  // الاتصال بـ Socket.IO (للتحديثات الفورية)
   SocketService().connect().then((_) {
     AppLogger.i('✅ SocketService connected');
   }).catchError((error) {
@@ -59,16 +77,31 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     
-    if (state == AppLifecycleState.resumed) {
-      // عندما يعود التطبيق إلى المقدمة
-      AppLogger.d('📱 App resumed');
-      _ensureFcmTokens();
+    final socketService = SocketService();
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // عندما يعود التطبيق إلى المقدمة
+        AppLogger.d('📱 App resumed - reconnecting Socket.IO...');
+        if (!socketService.isConnected) {
+          socketService.reconnect();
+        }
+        break;
+      case AppLifecycleState.paused:
+        // عندما يذهب التطبيق إلى الخلفية
+        AppLogger.d('📱 App paused - keeping Socket.IO connection alive');
+        // لا نقطع الاتصال - نبقيه نشطاً
+        break;
+      case AppLifecycleState.inactive:
+        AppLogger.d('📱 App inactive');
+        break;
+      case AppLifecycleState.detached:
+        AppLogger.d('📱 App detached');
+        break;
+      case AppLifecycleState.hidden:
+        AppLogger.d('📱 App hidden');
+        break;
     }
-  }
-
-  void _ensureFcmTokens() async {
-    // لا حاجة لـ FCM tokens - نستخدم Socket.IO الآن
-    AppLogger.d('App resumed - Socket.IO will handle notifications');
   }
 
   @override

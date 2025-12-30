@@ -7,8 +7,8 @@ import '../services/admin_service.dart';
 import '../services/driver_service.dart';
 import '../services/supermarket_service.dart';
 import '../services/user_service.dart';
-// import '../services/notification_service.dart'; // لا حاجة لـ Firebase
 import '../services/socket_service.dart';
+import '../services/firebase_messaging_service.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../core/utils/app_logger.dart';
 
@@ -85,10 +85,13 @@ class AuthProvider with ChangeNotifier {
         _setLoading(false);
         notifyListeners();
         
-      // Socket.IO connection - السائق يشارك في room
-      final socketService = SocketService();
-      socketService.connect();
-      socketService.joinDriverRoom(driver.driverId);
+        // Socket.IO connection - السائق يشارك في room
+        final socketService = SocketService();
+        socketService.connect();
+        socketService.joinDriverRoom(driver.driverId);
+        
+        // إرسال FCM Token للسيرفر (للإشعارات الخارجية)
+        FirebaseMessagingService().sendTokenToServer(driverId: driver.driverId);
         
         return true;
       } else {
@@ -162,6 +165,9 @@ class AuthProvider with ChangeNotifier {
       // Socket.IO connection - المستخدم يشارك في room للطلبات
       final socketService = SocketService();
       socketService.connect();
+      
+      // إرسال FCM Token للسيرفر (للإشعارات الخارجية)
+      FirebaseMessagingService().sendTokenToServer(phone: phone, userId: user.id);
       
       return true;
     } catch (e) {
@@ -274,7 +280,10 @@ class AuthProvider with ChangeNotifier {
       if (isDriverLoggedIn) {
         loadFutures.add(_driverService.getCurrentDriver().then((driver) async {
           _driver = driver;
-          // Socket.IO handles notifications - no FCM token needed
+          if (driver != null) {
+            // إرسال FCM Token للسيرفر (للإشعارات الخارجية)
+            FirebaseMessagingService().sendTokenToServer(driverId: driver.driverId);
+          }
         }));
       }
 
@@ -287,7 +296,11 @@ class AuthProvider with ChangeNotifier {
       if (userLoggedIn) {
         _isUserLoggedIn = true;
         loadFutures.add(loadCurrentUser().then((_) async {
-          // Socket.IO handles notifications - no FCM token needed
+          // إرسال FCM Token للسيرفر (للإشعارات الخارجية)
+          final userPhone = await SecureStorageService.getString('user_phone');
+          if (userPhone != null && _currentUser != null) {
+            FirebaseMessagingService().sendTokenToServer(phone: userPhone, userId: _currentUser!.id);
+          }
         }));
       }
 

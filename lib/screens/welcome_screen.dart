@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -17,10 +19,67 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late AnimationController _pulseController;
   late AnimationController _carAnimationController;
   late Animation<double> _carAnimation;
+  Timer? _textRotationTimer;
+  int _currentTextIndex = 0;
+  final Random _random = Random();
+  
+  // الجمل العامة
+  final List<String> _generalTexts = [
+    'كل خدماتك اليومية… بتطبيق واحد',
+    'لا تتعب نفسك، اطلب وخلي الباقي علينا',
+    'خدمات سريعة، أمان عالي، وأسعار تناسبك',
+    'كل شي تحتاجه يوصل لبابك',
+    'من البيت… لكل مكان',
+  ];
+  
+  // جمل التكسي والنقل
+  final List<String> _taxiTexts = [
+    'مشوارك علينا، راحتك علينا أكثر',
+    'تكسي آمن وسريع بأي وقت',
+    'ودّع الانتظار… وصل بسرعة',
+    'مشاوير داخل وخارج المدينة',
+  ];
+  
+  // جمل البنزين وخدمات السيارات
+  final List<String> _gasTexts = [
+    'نفد البنزين؟ إحنا نوصله لك',
+    'سيارتك تعطلت؟ نوصلك الحل',
+    'بنزين، تصليح، كرين… وإنت مرتاح',
+    'خدمات سيارات طوارئ 24/7',
+  ];
+  
+  // جمل التصليح والكرين
+  final List<String> _repairTexts = [
+    'عطل مفاجئ؟ نوصلك أقرب فني',
+    'كرين جاهز بأي وقت وأي مكان',
+    'تصليح سريع بدون تعب',
+    'خدمة طوارئ للسيارات بكل المناطق',
+  ];
+  
+  // جمل السوبر ماركت والتوصيل
+  final List<String> _supermarketTexts = [
+    'تسوقك اليومي يوصل لبابك',
+    'سوبر ماركت كامل بضغطة زر',
+    'لا تطلع من البيت… كل شي عندك',
+    'طلبك يوصل بسرعة وبأمان',
+  ];
+  
+  // جمل العاملات والخدمات المنزلية
+  final List<String> _maidTexts = [
+    'عاملات موثوقات بخدمة سريعة',
+    'خدمات منزلية حسب وقتك',
+    'نظافة، ترتيب، وخدمة مضمونة',
+  ];
+  
+  List<String> _rotatingTexts = [];
 
   @override
   void initState() {
     super.initState();
+    
+    // تهيئة الجمل مباشرة قبل أي شيء آخر
+    _selectRandomTexts();
+    
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -40,25 +99,60 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       curve: Curves.linear,
     ));
     
-    // تحميل حالة تسجيل الدخول فوراً بدون انتظار
-    _navigateToLogin();
+    // بدء التناوب بين الجمل كل 3 ثواني
+    _textRotationTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (mounted && _rotatingTexts.isNotEmpty) {
+        setState(() {
+          _currentTextIndex = (_currentTextIndex + 1) % _rotatingTexts.length;
+        });
+      }
+    });
+    
+    // تحميل حالة تسجيل الدخول في الخلفية بعد عرض الصفحة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigateToLogin();
+    });
+  }
+  
+  void _selectRandomTexts() {
+    // اختيار جملة عامة عشوائية
+    final generalText = _generalTexts[_random.nextInt(_generalTexts.length)];
+    
+    // اختيار خدمة عشوائية وجملة منها
+    final serviceTypes = [
+      _taxiTexts,
+      _gasTexts,
+      _repairTexts,
+      _supermarketTexts,
+      _maidTexts,
+    ];
+    
+    final selectedService = serviceTypes[_random.nextInt(serviceTypes.length)];
+    final serviceText = selectedService[_random.nextInt(selectedService.length)];
+    
+    // تعيين الجملتين للتناوب
+    _rotatingTexts = [generalText, serviceText];
+    _currentTextIndex = 0;
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     _carAnimationController.dispose();
+    _textRotationTimer?.cancel();
     super.dispose();
   }
 
   _navigateToLogin() async {
-    // تحميل حالة تسجيل الدخول فوراً بدون انتظار
+    if (!mounted) return;
+    
+    // تحميل حالة تسجيل الدخول في الخلفية بدون تأخير عرض الصفحة
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
     // تحميل حالة تسجيل الدخول بشكل متوازي مع عرض الشاشة
-    await authProvider.loadSavedAuth();
-    
-    if (!mounted) return;
+    authProvider.loadSavedAuth().catchError((error) {
+      // في حالة وجود خطأ، نستمر في الانتظار
+    });
     
     // الانتظار 5 ثواني دائماً قبل الانتقال للصفحة التالية
     await Future.delayed(const Duration(seconds: 5));
@@ -150,23 +244,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       );
                     },
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 20),
                   // النص الترحيبي مع animation
                   const Text(
-                    'أهلاً بك في',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w300,
-                      color: Colors.white,
-                    ),
-                    textDirection: TextDirection.rtl,
-                  )
-                      .animate()
-                      .fadeIn(delay: 400.ms, duration: 600.ms)
-                      .slideY(begin: 0.3, end: 0, delay: 400.ms, duration: 600.ms, curve: Curves.easeOut),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'تطبيق المنقذ',
+                    'المنقذ',
                     style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -182,8 +263,38 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     textDirection: TextDirection.rtl,
                   )
                       .animate()
-                      .fadeIn(delay: 600.ms, duration: 600.ms)
-                      .slideY(begin: 0.3, end: 0, delay: 600.ms, duration: 600.ms, curve: Curves.easeOut),
+                      .fadeIn(delay: 400.ms, duration: 600.ms)
+                      .slideY(begin: 0.3, end: 0, delay: 400.ms, duration: 600.ms, curve: Curves.easeOut),
+                  const SizedBox(height: 20),
+                  // الجمل المتناوبة
+                  _rotatingTexts.isNotEmpty
+                      ? AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 500),
+                          transitionBuilder: (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.0, 0.3),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            _rotatingTexts[_currentTextIndex],
+                            key: ValueKey<int>(_currentTextIndex),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                            textDirection: TextDirection.rtl,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                   const SizedBox(height: 60),
                   // مؤشر التحميل محسن
                   Container(

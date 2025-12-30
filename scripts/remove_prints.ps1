@@ -24,3 +24,4 @@ foreach ($file in $dartFiles) {
 
 Write-Host "Done cleaning print statements!"
 
+

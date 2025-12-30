@@ -1,5 +1,6 @@
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../core/utils/app_logger.dart';
 import '../utils/constants.dart';
 import 'local_notification_service.dart';
@@ -14,6 +15,12 @@ class SocketService {
   IO.Socket? _socket;
   bool _isConnected = false;
   final LocalNotificationService _notificationService = LocalNotificationService();
+  Timer? _keepAliveTimer;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 10;
+  static const Duration _keepAliveInterval = Duration(seconds: 30);
+  static const Duration _reconnectDelay = Duration(seconds: 5);
 
   bool get isConnected => _isConnected;
   IO.Socket? get socket => _socket;
@@ -39,13 +46,15 @@ class SocketService {
             .setTransports(['websocket', 'polling'])
             .enableAutoConnect()
             .enableReconnection()
-            .setReconnectionAttempts(5)
-            .setReconnectionDelay(1000)
+            .setReconnectionAttempts(_maxReconnectAttempts)
+            .setReconnectionDelay(2000)
             .setTimeout(20000)
+            .setReconnectionDelayMax(10000)
             .build(),
       );
 
       _setupSocketListeners();
+      _startKeepAlive();
     } catch (e, stackTrace) {
       AppLogger.e('Error connecting to Socket.IO server', e, stackTrace);
     }
@@ -57,16 +66,23 @@ class SocketService {
 
     _socket!.onConnect((_) {
       _isConnected = true;
-      AppLogger.i('✅ Socket.IO connected');
+      _reconnectAttempts = 0;
+      AppLogger.i('✅✅✅ Socket.IO connected successfully - ready to receive notifications');
+      _startKeepAlive();
+      _stopReconnectTimer();
     });
 
     _socket!.onDisconnect((_) {
       _isConnected = false;
       AppLogger.w('Socket.IO disconnected');
+      _stopKeepAlive();
+      _startReconnectTimer();
     });
 
     _socket!.onConnectError((error) {
       AppLogger.e('Socket.IO connection error: $error');
+      _isConnected = false;
+      _startReconnectTimer();
     });
 
     _socket!.onError((error) {
@@ -75,25 +91,31 @@ class SocketService {
 
     // الاستماع للإشعارات (مع فلترة حسب رقم الهاتف والدور)
     _socket!.on('notification', (data) async {
-      AppLogger.d('📨 Notification received via Socket.IO: $data');
+      AppLogger.i('📨📨📨 Notification received via Socket.IO: $data');
       if (data is Map<String, dynamic>) {
         // التحقق من أن الإشعار موجه للمستخدم الحالي
         final shouldShow = await _shouldShowNotification(data);
+        AppLogger.i('🔍 Should show notification: $shouldShow');
         if (shouldShow) {
-          _notificationService.showNotificationFromSocket(data);
+          AppLogger.i('✅ Showing notification: ${data['title']} - ${data['body']}');
+          await _notificationService.showNotificationFromSocket(data);
         } else {
-          AppLogger.d('🔇 Notification filtered out - not for current user');
+          AppLogger.w('🔇 Notification filtered out - not for current user');
         }
+      } else {
+        AppLogger.w('⚠️ Notification data is not Map: ${data.runtimeType}');
       }
     });
 
     // الاستماع للطلبات الجديدة
     _socket!.on('order:new', (data) async {
-      AppLogger.d('📦 New order received via Socket.IO: $data');
+      AppLogger.i('📦📦📦 New order received via Socket.IO: $data');
       if (data is Map<String, dynamic>) {
         // التحقق من أن الطلب موجه للسائق الحالي
         final shouldShow = await _shouldShowNewOrderNotification(data);
+        AppLogger.i('🔍 Should show new order notification: $shouldShow');
         if (shouldShow) {
+          AppLogger.i('✅ Showing new order notification');
           // إشعار للسائق
           await _notificationService.showNotification(
             title: 'طلب جديد متاح',
@@ -103,21 +125,29 @@ class SocketService {
               'orderId': data['_id']?.toString() ?? data['id']?.toString(),
             },
           );
+        } else {
+          AppLogger.w('🔇 New order notification filtered out');
         }
+      } else {
+        AppLogger.w('⚠️ New order data is not Map: ${data.runtimeType}');
       }
     });
 
     // الاستماع لتحديثات حالة الطلب (مع فلترة حسب رقم الهاتف والدور)
     _socket!.on('order:status:updated', (data) async {
-      AppLogger.d('🔄 Order status updated via Socket.IO: $data');
+      AppLogger.i('🔄🔄🔄 Order status updated via Socket.IO: $data');
       if (data is Map<String, dynamic>) {
         // التحقق من أن التحديث موجه للمستخدم الحالي
         final shouldShow = await _shouldShowOrderStatusNotification(data);
+        AppLogger.i('🔍 Should show order status notification: $shouldShow');
         if (shouldShow) {
+          AppLogger.i('✅ Showing order status notification');
           await _showOrderStatusNotification(data);
         } else {
-          AppLogger.d('🔇 Order status update filtered out - not for current user');
+          AppLogger.w('🔇 Order status update filtered out - not for current user');
         }
+      } else {
+        AppLogger.w('⚠️ Order status data is not Map: ${data.runtimeType}');
       }
     });
   }
@@ -180,11 +210,15 @@ class SocketService {
       // جلب driverId المحفوظ (للسائق)
       final driverId = await SecureStorageService.getString('driver_id');
       
+      AppLogger.d('🔍 Checking notification filter - userPhone: ${userPhone != null ? "exists" : "null"}, driverId: ${driverId != null ? "exists" : "null"}');
+      
       // جلب رقم الهاتف من بيانات الإشعار
       final notificationPhone = data['phone'] as String?;
       final notificationType = data['type'] as String?;
       
-      // إذا كان الإشعار يحتوي على رقم هاتف، تحقق من أنه مطابق للمستخدم الحالي
+      AppLogger.d('🔍 Notification data - phone: $notificationPhone, type: $notificationType');
+      
+      // إذا كان الإشعار يحتوي على رقم هاتف، فهو للزبون فقط - لا تعرضه للسائق
       if (notificationPhone != null && notificationPhone.isNotEmpty) {
         // تطبيع رقم الهاتف للمقارنة (إزالة المسافات والرموز)
         String normalizePhone(String phone) {
@@ -194,20 +228,23 @@ class SocketService {
         final normalizedNotificationPhone = normalizePhone(notificationPhone);
         final normalizedUserPhone = userPhone != null ? normalizePhone(userPhone) : '';
         
-        // إذا كان المستخدم مسجل دخول وكان رقم الهاتف يطابق، اعرض الإشعار
+        // إذا كان المستخدم (الزبون) مسجل دخول وكان رقم الهاتف يطابق، اعرض الإشعار
         if (userPhone != null && normalizedNotificationPhone == normalizedUserPhone) {
           AppLogger.d('✅ Notification matches current user phone: $notificationPhone');
           return true;
         }
         
-        // إذا كان رقم الهاتف لا يطابق، لا تعرض الإشعار
-        AppLogger.d('🔇 Notification phone ($notificationPhone) does not match current user phone ($userPhone)');
+        // إذا كان رقم الهاتف لا يطابق أو المستخدم الحالي سائق، لا تعرض الإشعار
+        AppLogger.d('🔇 Notification phone ($notificationPhone) does not match current user phone ($userPhone) or user is driver');
         return false;
       }
       
-      // إذا كان الإشعار من نوع order_taken أو order_update للسائق، تحقق من driverId
-      if (notificationType == 'order_taken' || notificationType == 'order_update') {
-        // هذه الإشعارات للسائقين - إذا كان المستخدم الحالي سائق، اعرض الإشعار
+      // إذا كان الإشعار من نوع order_taken أو order_update بدون رقم هاتف، تحقق من driverId
+      // (هذه الإشعارات للسائقين فقط عندما لا تحتوي على رقم هاتف)
+      if (notificationType == 'order_taken' || notificationType == 'order_update' || 
+          notificationType == 'driver_accepted' || notificationType == 'driver_on_way' || 
+          notificationType == 'order_cancelled') {
+        // هذه الإشعارات للسائقين فقط - إذا كان المستخدم الحالي سائق، اعرض الإشعار
         if (driverId != null && driverId.isNotEmpty) {
           AppLogger.d('✅ Notification is for driver - current user is driver: $driverId');
           return true;
@@ -227,8 +264,14 @@ class SocketService {
         return false;
       }
       
-      // إذا لم يكن هناك معلومات كافية للفلترة، لا تعرض الإشعار (لتجنب الإشعارات الخاطئة)
-      AppLogger.d('🔇 Notification does not contain enough info to filter - skipping to avoid wrong notifications');
+      // إذا لم يكن هناك معلومات كافية للفلترة، اعرض الإشعار فقط للزبون (لأن السيرفر يفلتر)
+      if (userPhone != null && driverId == null) {
+        AppLogger.d('⚠️ Notification does not contain enough info to filter - showing for user (server filtered)');
+        return true;
+      }
+      
+      // إذا كان المستخدم سائق ولا يوجد معلومات كافية، لا تعرض (آمن أكثر)
+      AppLogger.d('⚠️ Notification does not contain enough info to filter - not showing for driver (server filtered)');
       return false;
     } catch (e, stackTrace) {
       AppLogger.e('Error checking if notification should be shown', e, stackTrace);
@@ -248,16 +291,57 @@ class SocketService {
       // جلب driverId المحفوظ (للسائق)
       final driverId = await SecureStorageService.getString('driver_id');
       
-      // إذا كان المستخدم يتابع هذا الطلب، اعرض الإشعار
-      // (سيتم التحقق من الطلب في السيرفر أو من البيانات المحلية)
+      AppLogger.d('🔍 Order status filter - orderId: $orderId, userPhone: ${userPhone != null ? "exists" : "null"}, driverId: ${driverId != null ? "exists" : "null"}');
       
-      // إذا كان هناك رقم هاتف أو driverId، اعرض الإشعار
-      // (الفلترة الدقيقة تتم في السيرفر)
-      if (userPhone != null || driverId != null) {
-        AppLogger.d('✅ Order status update - user/driver logged in, showing notification');
-        return true;
+      // التحقق من customerPhone و driverId في بيانات الإشعار
+      final customerPhone = data['customerPhone'] as String?;
+      final orderDriverId = data['driverId'] as String?;
+      
+      // إذا كان الإشعار يحتوي على customerPhone، فهو للزبون فقط
+      if (customerPhone != null && customerPhone.isNotEmpty) {
+        if (userPhone != null && driverId == null) {
+          // تطبيع رقم الهاتف للمقارنة
+          String normalizePhone(String phone) {
+            return phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+          }
+          
+          final normalizedCustomerPhone = normalizePhone(customerPhone);
+          final normalizedUserPhone = normalizePhone(userPhone);
+          
+          if (normalizedCustomerPhone == normalizedUserPhone) {
+            AppLogger.d('✅ Order status update - matches customer phone: $customerPhone');
+            return true;
+          } else {
+            AppLogger.d('🔇 Order status update - customer phone ($customerPhone) does not match user phone ($userPhone)');
+            return false;
+          }
+        } else {
+          // إذا كان المستخدم سائق، لا تعرض إشعارات الزبون
+          AppLogger.d('🔇 Order status update - contains customerPhone but current user is driver, not showing');
+          return false;
+        }
       }
       
+      // إذا كان الإشعار يحتوي على driverId، فهو للسائق فقط
+      if (orderDriverId != null && orderDriverId.isNotEmpty) {
+        if (driverId != null && driverId.isNotEmpty) {
+          if (orderDriverId == driverId || orderDriverId.toString() == driverId.toString()) {
+            AppLogger.d('✅ Order status update - matches driver ID: $orderDriverId');
+            return true;
+          } else {
+            AppLogger.d('🔇 Order status update - driver ID ($orderDriverId) does not match current driver ($driverId)');
+            return false;
+          }
+        } else {
+          // إذا كان المستخدم زبون، لا تعرض إشعارات السائق
+          AppLogger.d('🔇 Order status update - contains driverId but current user is customer, not showing');
+          return false;
+        }
+      }
+      
+      // إذا لم يكن هناك معلومات للفلترة، لا تعرض الإشعار (آمن أكثر)
+      // لأن الإشعارات الفعلية تأتي عبر FCM مع فلترة صحيحة
+      AppLogger.w('⚠️ Order status update - no customerPhone or driverId in data, not showing (FCM handles actual notifications)');
       return false;
     } catch (e, stackTrace) {
       AppLogger.e('Error checking if order status notification should be shown', e, stackTrace);
@@ -321,8 +405,77 @@ class SocketService {
     }
   }
 
+  /// إرسال Keep-alive ping للحفاظ على الاتصال
+  void _startKeepAlive() {
+    _stopKeepAlive();
+    _keepAliveTimer = Timer.periodic(_keepAliveInterval, (timer) {
+      if (_socket?.connected == true) {
+        try {
+          // إرسال ping للحفاظ على الاتصال
+          _socket?.emit('ping', DateTime.now().millisecondsSinceEpoch);
+          AppLogger.d('📡 Keep-alive ping sent');
+        } catch (e) {
+          AppLogger.e('Error sending keep-alive ping', e);
+        }
+      } else {
+        _stopKeepAlive();
+      }
+    });
+  }
+
+  /// إيقاف Keep-alive
+  void _stopKeepAlive() {
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = null;
+  }
+
+  /// بدء محاولات إعادة الاتصال
+  void _startReconnectTimer() {
+    _stopReconnectTimer();
+    
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      AppLogger.w('Max reconnection attempts reached, will retry later');
+      // إعادة المحاولة بعد فترة أطول
+      _reconnectTimer = Timer(const Duration(minutes: 5), () {
+        _reconnectAttempts = 0;
+        _startReconnectTimer();
+      });
+      return;
+    }
+
+    _reconnectTimer = Timer(_reconnectDelay, () {
+      _reconnectAttempts++;
+      AppLogger.d('🔄 Attempting to reconnect Socket.IO (attempt $_reconnectAttempts/$_maxReconnectAttempts)...');
+      
+      if (_socket?.connected != true) {
+        try {
+          _socket?.connect();
+        } catch (e) {
+          AppLogger.e('Error reconnecting Socket.IO', e);
+          _startReconnectTimer();
+        }
+      }
+    });
+  }
+
+  /// إيقاف محاولات إعادة الاتصال
+  void _stopReconnectTimer() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+  }
+
+  /// إعادة الاتصال يدوياً
+  Future<void> reconnect() async {
+    _reconnectAttempts = 0;
+    disconnect();
+    await Future.delayed(const Duration(seconds: 2));
+    await connect();
+  }
+
   /// قطع الاتصال
   void disconnect() {
+    _stopKeepAlive();
+    _stopReconnectTimer();
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

@@ -97,7 +97,7 @@ class LocalNotificationService {
         await initialize();
       }
 
-      const androidDetails = AndroidNotificationDetails(
+      final androidDetails = AndroidNotificationDetails(
         'munqeth_channel',
         'منقذ',
         channelDescription: 'إشعارات تطبيق المنقذ',
@@ -106,6 +106,11 @@ class LocalNotificationService {
         showWhen: true,
         enableVibration: true,
         playSound: true,
+        ongoing: false,
+        autoCancel: true,
+        channelShowBadge: true,
+        enableLights: true,
+        styleInformation: BigTextStyleInformation(body),
       );
 
       const iosDetails = DarwinNotificationDetails(
@@ -114,7 +119,7 @@ class LocalNotificationService {
         presentSound: true,
       );
 
-      const details = NotificationDetails(
+      final details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
@@ -130,7 +135,7 @@ class LocalNotificationService {
         payload: payload,
       );
 
-      AppLogger.d('✅ Local notification shown: $title');
+      AppLogger.i('✅✅✅ Local notification shown successfully: $title - $body');
     } catch (e, stackTrace) {
       AppLogger.e('Error showing local notification', e, stackTrace);
     }
