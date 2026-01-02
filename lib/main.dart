@@ -18,8 +18,10 @@ void main() async {
   try {
     await Firebase.initializeApp();
     AppLogger.i('✅ Firebase initialized');
-  } catch (e) {
-    AppLogger.e('❌ Error initializing Firebase', e);
+    print('✅ Firebase initialized'); // Print للتحقق في Release APK
+  } catch (e, stackTrace) {
+    AppLogger.e('❌ Error initializing Firebase', e, stackTrace);
+    print('❌ Error initializing Firebase: $e'); // Print للتحقق في Release APK
     // يمكن المتابعة بدون Firebase إذا لم يكن متوفراً
   }
   
@@ -32,8 +34,10 @@ void main() async {
   // تهيئة Firebase Messaging (للإشعارات الخارجية - عندما يكون التطبيق مغلق)
   FirebaseMessagingService().initialize().then((_) {
     AppLogger.i('✅ FirebaseMessagingService initialized');
-  }).catchError((error) {
-    AppLogger.e('❌ Error initializing FirebaseMessagingService', error);
+    print('✅ FirebaseMessagingService initialized'); // Print للتحقق في Release APK
+  }).catchError((error, stackTrace) {
+    AppLogger.e('❌ Error initializing FirebaseMessagingService', error, stackTrace);
+    print('❌ Error initializing FirebaseMessagingService: $error'); // Print للتحقق في Release APK
   });
   
   // تهيئة Local Notifications (للإشعارات المحلية - عندما يكون التطبيق مفتوح)

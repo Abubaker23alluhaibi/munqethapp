@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -225,6 +226,46 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
           return;
         }
 
+        // Show loading dialog with supermarket image
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) {
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _SupermarketLoadingWidget(),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'جاري البحث عن أقرب سوبر ماركت',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+        
+        // Give time for dialog to render
+        await Future.delayed(const Duration(milliseconds: 300));
+
         // Generate order ID
         final orderId = 'ORD${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
@@ -239,7 +280,21 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
         );
 
         if (nearestSupermarket == null) {
-          throw Exception('لا يوجد سوبر ماركت متاح');
+          // Close loading dialog
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            ErrorHandler.showErrorSnackBar(
+              context,
+              null,
+              customMessage: 'لا يوجد سوبر ماركت متاح حالياً. الرجاء المحاولة لاحقاً',
+            );
+          }
+          return;
         }
 
         // Calculate distance and delivery fee (إذا لم تكن محسوبة مسبقاً)
@@ -278,13 +333,37 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
           }
         }
         
+        // Check if supermarket is within 5 km
+        if (_distanceToSupermarket == null || _distanceToSupermarket! > 5.0) {
+          // Close loading dialog
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            ErrorHandler.showErrorSnackBar(
+              context,
+              null,
+              customMessage: 'لا يوجد سوبر ماركت متاح ضمن مسافة 5 كيلومتر. الرجاء المحاولة لاحقاً',
+            );
+          }
+          return;
+        }
+        
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+        
         // التأكد من أن deliveryFee ليس null أو أقل من 1000
         if (_deliveryFee == null || _deliveryFee! < 1000) {
           _deliveryFee = 1000; // ضمان أن المبلغ على الأقل 1000
         }
  
         // Find nearest delivery driver
-        final nearestDriver = _driverService.findNearestDriver(
+        final nearestDriver = await _driverService.findNearestDriver(
           customerLat,
           customerLng,
           'delivery',
@@ -457,6 +536,12 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
         );
       } catch (e) {
         if (mounted) {
+          // Close loading dialog if still open
+          try {
+            Navigator.of(context).pop();
+          } catch (_) {
+            // Dialog might not be open, ignore
+          }
           setState(() {
             _isLoading = false;
           });
@@ -868,6 +953,119 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Widget تحميل خاص للسوبر ماركت
+class _SupermarketLoadingWidget extends StatefulWidget {
+  const _SupermarketLoadingWidget();
+
+  @override
+  State<_SupermarketLoadingWidget> createState() => _SupermarketLoadingWidgetState();
+}
+
+class _SupermarketLoadingWidgetState extends State<_SupermarketLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late AnimationController _sparkleController;
+  late Animation<double> _animation;
+  late Animation<double> _sparkleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _animation = Tween<double>(
+      begin: -0.1,
+      end: 0.1,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Animation للنجوم/اللمعان (تظهر وتختفي)
+    _sparkleController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat();
+    
+    _sparkleAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(
+      parent: _sparkleController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _sparkleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // الصورة المتحركة
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
+                child: Transform.rotate(
+                  angle: _animation.value * 0.1,
+                  child: Image.asset(
+                    'assets/images/supermaketloud.jpg',
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // نجوم/لمعان متحركة (تظهر حول الصورة)
+          ...List.generate(4, (index) {
+            final delay = index * 0.25;
+            final angle = (index * 90) * (math.pi / 180);
+            return Positioned(
+              top: 40 + (math.sin(angle) * 40),
+              left: 40 + (math.cos(angle) * 40),
+              child: AnimatedBuilder(
+                animation: _sparkleAnimation,
+                builder: (context, child) {
+                  final adjustedValue = (_sparkleAnimation.value + delay) % 1.0;
+                  final opacity = adjustedValue < 0.5 
+                      ? (adjustedValue * 2) 
+                      : (2 - adjustedValue * 2);
+                  
+                  return Opacity(
+                    opacity: opacity,
+                    child: const Icon(
+                      Icons.shopping_basket,
+                      size: 16,
+                      color: AppTheme.primaryColor,
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

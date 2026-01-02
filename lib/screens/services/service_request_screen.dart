@@ -1,8 +1,10 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/order.dart';
+import '../../models/driver.dart';
 import '../../services/order_service.dart';
 import '../../services/driver_service.dart';
 import '../../services/storage_service.dart';
@@ -10,6 +12,7 @@ import '../../services/user_service.dart';
 import '../../widgets/location_picker_widget.dart';
 import '../../utils/constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/utils/distance_calculator.dart';
 
 class ServiceRequestScreen extends StatefulWidget {
   final String serviceType; // 'maintenance', 'car_emergency', 'fuel', 'maid', 'car_wash'
@@ -263,6 +266,49 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
           return;
         }
 
+        // Show loading dialog with service-specific widget (for all services including maid)
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) {
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _getLoadingWidget(),
+                      const SizedBox(height: 20),
+                      Text(
+                        _getSearchMessage(),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+        
+        // Give time for dialog to render
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        // إبطاء عملية البحث قليلاً للبحث بدقة (لجميع الخدمات)
+        await Future.delayed(const Duration(milliseconds: 1500));
+
         // Generate order ID
         final prefix = widget.serviceType == 'car_emergency'
             ? 'EMERG'
@@ -275,18 +321,73 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                         : 'MAINT';
         final orderId = '$prefix${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
-        // Find nearest driver (only if location is provided and not maid service)
-        Future<dynamic> nearestDriver;
-        if (widget.serviceType == 'maid') {
-          nearestDriver = Future.value(null);
-        } else if (_customerLat != null && _customerLng != null) {
-          nearestDriver = _driverService.findNearestDriver(
+        // Find nearest driver with distance check (15 km max for all services)
+        Driver? nearestDriver;
+        double? driverDistance;
+        
+        if (widget.serviceType != 'maid' && _customerLat != null && _customerLng != null) {
+          nearestDriver = await _driverService.findNearestDriver(
             _customerLat!,
             _customerLng!,
             widget.serviceType,
           );
+          
+          if (nearestDriver != null) {
+            driverDistance = nearestDriver.distanceTo(_customerLat!, _customerLng!);
+            
+            // Check if driver is within 15 km
+            if (driverDistance == null || driverDistance > 15.0) {
+              // Close loading dialog
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
+              
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('لا يوجد ${_getServiceName()} متاح ضمن مسافة 15 كيلومتر. الرجاء المحاولة لاحقاً'),
+                    backgroundColor: AppTheme.errorColor,
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+              }
+              return;
+            }
+          } else {
+            // Close loading dialog
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+            
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('لا يوجد ${_getServiceName()} متاح حالياً. الرجاء المحاولة لاحقاً'),
+                  backgroundColor: AppTheme.errorColor,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+            return;
+          }
         } else {
-          nearestDriver = Future.value(null);
+          nearestDriver = null;
+        }
+
+        // إبطاء إضافي قليلاً للبحث بدقة (خاصة للعاملة)
+        if (widget.serviceType == 'maid') {
+          await Future.delayed(const Duration(milliseconds: 800));
+        }
+
+        // Close loading dialog (for all services)
+        if (mounted) {
+          Navigator.of(context).pop();
         }
 
         // Calculate fare for fuel, car wash, or maid
@@ -294,13 +395,9 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
         if (widget.serviceType == 'fuel') {
           // استخدام السعر المحسوب مسبقاً
           fare = _calculatedFare;
-          if (fare == null) {
-            // إذا لم يكن محسوباً، احسبه الآن
-            final driver = await nearestDriver;
-            if (driver != null && _customerLat != null && _customerLng != null) {
-              final distance = driver.distanceTo(_customerLat!, _customerLng!) ?? 1.0;
-              fare = calculateFuelPrice(_fuelQuantity, distance).toDouble();
-            }
+          if (fare == null && nearestDriver != null && _customerLat != null && _customerLng != null) {
+            final distance = driverDistance ?? nearestDriver.distanceTo(_customerLat!, _customerLng!) ?? 1.0;
+            fare = calculateFuelPrice(_fuelQuantity, distance).toDouble();
           }
         } else if (widget.serviceType == 'car_wash' && _carWashSize != null) {
           fare = (_carWashSizes[_carWashSize]!['price'] as int).toDouble();
@@ -425,6 +522,12 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
         );
       } catch (e) {
         if (mounted) {
+          // Close loading dialog if still open
+          try {
+            Navigator.of(context).pop();
+          } catch (_) {
+            // Dialog might not be open, ignore
+          }
           setState(() {
             _isLoading = false;
           });
@@ -436,6 +539,65 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
           );
         }
       }
+    }
+  }
+
+  // Get service name for messages
+  String _getServiceName() {
+    switch (widget.serviceType) {
+      case 'fuel':
+        return 'بنزين';
+      case 'car_emergency':
+        return 'طوارئ سيارات';
+      case 'car_wash':
+        return 'غسيل سيارات';
+      case 'maintenance':
+        return 'مصلح';
+      default:
+        return 'خدمة';
+    }
+  }
+
+  // Get search message
+  String _getSearchMessage() {
+    switch (widget.serviceType) {
+      case 'fuel':
+        return 'جاري البحث عن أقرب بنزين';
+      case 'car_emergency':
+        return 'جاري البحث عن أقرب طوارئ سيارات';
+      case 'car_wash':
+        return 'جاري البحث عن أقرب خدمة غسيل';
+      case 'maintenance':
+        return 'جاري البحث عن أقرب مصلح';
+      case 'maid':
+        return 'جاري البحث عن أقرب عاملة متاحة';
+      default:
+        return 'جاري البحث';
+    }
+  }
+
+  // Get loading widget based on service type
+  Widget _getLoadingWidget() {
+    switch (widget.serviceType) {
+      case 'fuel':
+        return const _FuelLoadingWidget();
+      case 'car_emergency':
+        return const _CarEmergencyLoadingWidget();
+      case 'car_wash':
+        return const _CarWashLoadingWidget();
+      case 'maintenance':
+        return const _MaintenanceLoadingWidget();
+      case 'maid':
+        return const _MaidLoadingWidget();
+      default:
+        return const SizedBox(
+          height: 120,
+          width: 120,
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+          ),
+        );
     }
   }
 
@@ -1008,7 +1170,7 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                 const SizedBox(height: 32),
                 // Submit button
                 ElevatedButton(
-                  onPressed: (_isLoading || (widget.serviceType == 'fuel' && _calculatedFare == null)) 
+                  onPressed: _isLoading 
                       ? null 
                       : _submitRequest,
                   style: ElevatedButton.styleFrom(
@@ -1042,6 +1204,626 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Widget تحميل خاص للبنزين مع قطرة متحركة
+class _FuelLoadingWidget extends StatefulWidget {
+  const _FuelLoadingWidget();
+
+  @override
+  State<_FuelLoadingWidget> createState() => _FuelLoadingWidgetState();
+}
+
+class _FuelLoadingWidgetState extends State<_FuelLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _dropController;
+  late AnimationController _pumpController;
+  late Animation<double> _dropAnimation;
+  late Animation<double> _pumpAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Animation للقطرة (تخرج من فم أداة التعبئة وتسقط للأسفل)
+    _dropController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
+    
+    _dropAnimation = Tween<double>(
+      begin: 0,
+      end: 50,
+    ).animate(CurvedAnimation(
+      parent: _dropController,
+      curve: Curves.easeIn,
+    ));
+    
+    // Animation لحركة المضخة (اهتزاز خفيف)
+    _pumpController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _pumpAnimation = Tween<double>(
+      begin: -0.05,
+      end: 0.05,
+    ).animate(CurvedAnimation(
+      parent: _pumpController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _dropController.dispose();
+    _pumpController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // الصورة المتحركة (اهتزاز خفيف)
+          AnimatedBuilder(
+            animation: _pumpAnimation,
+            builder: (context, child) {
+              return Transform.rotate(
+                angle: _pumpAnimation.value,
+                child: Image.asset(
+                  'assets/images/fuelLoud.png',
+                  height: 120,
+                  width: 120,
+                  fit: BoxFit.contain,
+                ),
+              );
+            },
+          ),
+          
+          // قطرة متحركة (تخرج من فم أداة التعبئة وتسقط للأسفل)
+          Positioned(
+            top: 55, // موضع فم أداة التعبئة تقريباً
+            right: 20, // أقرب إلى اليسار (اليمين في RTL)
+            child: AnimatedBuilder(
+              animation: _dropAnimation,
+              builder: (context, child) {
+                // إخفاء القطرة عند بداية الحركة (0) وإظهارها تدريجياً
+                final opacity = _dropController.value < 0.1 
+                    ? _dropController.value * 10 
+                    : (_dropController.value > 0.9 
+                        ? (1 - _dropController.value) * 10 
+                        : 1.0);
+                
+                return Opacity(
+                  opacity: opacity.clamp(0.0, 1.0),
+                  child: Transform.translate(
+                    offset: Offset(0, _dropAnimation.value),
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.primaryColor.withOpacity(0.8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryColor.withOpacity(0.6),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget تحميل خاص لطوارئ السيارات
+class _CarEmergencyLoadingWidget extends StatefulWidget {
+  const _CarEmergencyLoadingWidget();
+
+  @override
+  State<_CarEmergencyLoadingWidget> createState() => _CarEmergencyLoadingWidgetState();
+}
+
+class _CarEmergencyLoadingWidgetState extends State<_CarEmergencyLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late AnimationController _sparkController;
+  late Animation<double> _animation;
+  late Animation<double> _sparkAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _animation = Tween<double>(
+      begin: -0.1,
+      end: 0.1,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Animation للشرارة (تظهر وتختفي)
+    _sparkController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _sparkAnimation = Tween<double>(
+      begin: 0.3,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _sparkController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _sparkController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // الصورة المتحركة
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
+                child: Transform.rotate(
+                  angle: _animation.value * 0.1,
+                  child: Image.asset(
+                    'assets/images/carEloud.png',
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // شرارة متحركة (تظهر وتختفي)
+          Positioned(
+            top: 20,
+            right: 20,
+            child: AnimatedBuilder(
+              animation: _sparkAnimation,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _sparkAnimation.value,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.orange.withOpacity(0.8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange.withOpacity(_sparkAnimation.value * 0.8),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget تحميل خاص لغسيل السيارات
+class _CarWashLoadingWidget extends StatefulWidget {
+  const _CarWashLoadingWidget();
+
+  @override
+  State<_CarWashLoadingWidget> createState() => _CarWashLoadingWidgetState();
+}
+
+class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _carController;
+  late AnimationController _waterController;
+  late Animation<double> _carAnimation;
+  late Animation<double> _waterAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    // Animation للسيارة (تتحرك يمين ويسار)
+    _carController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _carAnimation = Tween<double>(
+      begin: -15,
+      end: 15,
+    ).animate(CurvedAnimation(
+      parent: _carController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Animation للماء/الرغوة (تتحرك من الأعلى للأسفل)
+    _waterController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
+    
+    _waterAnimation = Tween<double>(
+      begin: -20,
+      end: 40,
+    ).animate(CurvedAnimation(
+      parent: _waterController,
+      curve: Curves.easeIn,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _carController.dispose();
+    _waterController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // السيارة (أيقونة سيارة)
+          AnimatedBuilder(
+            animation: _carAnimation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(_carAnimation.value, 0),
+                child: const Icon(
+                  Icons.directions_car,
+                  size: 100,
+                  color: AppTheme.primaryColor,
+                ),
+              );
+            },
+          ),
+          
+          // خطوط الماء/الرغوة (تتحرك من الأعلى للأسفل)
+          ...List.generate(5, (index) {
+            final delay = index * 0.2;
+            return Positioned(
+              top: 20 + (index * 15),
+              left: 30 + (index * 8),
+              right: 30 + (index * 8),
+              child: AnimatedBuilder(
+                animation: _waterAnimation,
+                builder: (context, child) {
+                  final adjustedValue = (_waterController.value + delay) % 1.0;
+                  final opacity = adjustedValue < 0.3 
+                      ? (adjustedValue / 0.3) 
+                      : (adjustedValue > 0.7 
+                          ? (1 - adjustedValue) / 0.3 
+                          : 1.0);
+                  
+                  return Opacity(
+                    opacity: opacity.clamp(0.0, 1.0),
+                    child: Transform.translate(
+                      offset: Offset(0, _waterAnimation.value),
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.4),
+                              blurRadius: 4,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+          
+          // فقاعات صغيرة (تظهر وتختفي)
+          ...List.generate(6, (index) {
+            final delay = index * 0.15;
+            final angle = (index * 60) * (math.pi / 180);
+            return Positioned(
+              top: 60 + (math.sin(angle) * 30),
+              left: 50 + (math.cos(angle) * 30),
+              child: AnimatedBuilder(
+                animation: _waterController,
+                builder: (context, child) {
+                  final adjustedValue = (_waterController.value + delay) % 1.0;
+                  final opacity = adjustedValue < 0.5 
+                      ? (adjustedValue * 2) 
+                      : (2 - adjustedValue * 2);
+                  final scale = 0.3 + (adjustedValue * 0.7);
+                  
+                  return Opacity(
+                    opacity: opacity,
+                    child: Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.8),
+                          border: Border.all(
+                            color: Colors.blue.withOpacity(0.6),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget تحميل خاص للصيانة
+class _MaintenanceLoadingWidget extends StatefulWidget {
+  const _MaintenanceLoadingWidget();
+
+  @override
+  State<_MaintenanceLoadingWidget> createState() => _MaintenanceLoadingWidgetState();
+}
+
+class _MaintenanceLoadingWidgetState extends State<_MaintenanceLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late AnimationController _toolController;
+  late Animation<double> _animation;
+  late Animation<double> _toolAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _animation = Tween<double>(
+      begin: -0.1,
+      end: 0.1,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Animation للأدوات (تظهر وتختفي)
+    _toolController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _toolAnimation = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _toolController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _toolController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // الصورة المتحركة
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
+                child: Transform.rotate(
+                  angle: _animation.value * 0.1,
+                  child: Image.asset(
+                    'assets/images/carEloud.png',
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // أدوات متحركة (تظهر وتختفي)
+          Positioned(
+            top: 15,
+            left: 15,
+            child: AnimatedBuilder(
+              animation: _toolAnimation,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _toolAnimation.value,
+                  child: Transform.rotate(
+                    angle: _toolController.value * 2 * math.pi * 0.2,
+                    child: const Icon(
+                      Icons.build,
+                      size: 24,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget تحميل خاص للعمال
+class _MaidLoadingWidget extends StatefulWidget {
+  const _MaidLoadingWidget();
+
+  @override
+  State<_MaidLoadingWidget> createState() => _MaidLoadingWidgetState();
+}
+
+class _MaidLoadingWidgetState extends State<_MaidLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late AnimationController _sparkleController;
+  late Animation<double> _animation;
+  late Animation<double> _sparkleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _animation = Tween<double>(
+      begin: -0.1,
+      end: 0.1,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Animation للنجوم/اللمعان (تظهر وتختفي)
+    _sparkleController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat();
+    
+    _sparkleAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(
+      parent: _sparkleController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _sparkleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // الصورة المتحركة
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
+                child: Transform.rotate(
+                  angle: _animation.value * 0.1,
+                  child: Image.asset(
+                    'assets/images/wokerloud.png',
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // نجوم/لمعان متحركة (تظهر حول الصورة)
+          ...List.generate(4, (index) {
+            final delay = index * 0.25;
+            final angle = (index * 90) * (math.pi / 180);
+            return Positioned(
+              top: 40 + (math.sin(angle) * 40),
+              left: 40 + (math.cos(angle) * 40),
+              child: AnimatedBuilder(
+                animation: _sparkleAnimation,
+                builder: (context, child) {
+                  final adjustedValue = (_sparkleAnimation.value + delay) % 1.0;
+                  final opacity = adjustedValue < 0.5 
+                      ? (adjustedValue * 2) 
+                      : (2 - adjustedValue * 2);
+                  
+                  return Opacity(
+                    opacity: opacity,
+                    child: const Icon(
+                      Icons.star,
+                      size: 16,
+                      color: Colors.amber,
+                    ),
+                  );
+                },
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

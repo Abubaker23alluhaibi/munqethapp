@@ -814,6 +814,43 @@ class AdminService {
       };
     }
   }
+
+  // تغيير كلمة المرور للإدمن
+  Future<bool> changePassword(String adminId, String currentPassword, String newPassword) async {
+    try {
+      AppLogger.d('Changing password for admin ID: $adminId');
+      
+      final response = await _apiService.put('/admins/$adminId/change-password', data: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+      
+      if (response.statusCode == 200) {
+        AppLogger.i('✅ Password changed successfully for admin ID: $adminId');
+        
+        // تحديث البيانات المحلية إذا كان هذا الإدمن هو المسجل دخوله
+        final currentAdmin = await getCurrentAdmin();
+        if (currentAdmin != null && currentAdmin.id == adminId) {
+          // لا نحفظ كلمة المرور في البيانات المحلية، فقط نحدث حالة تسجيل الدخول
+          AppLogger.d('Admin password changed, local data will be updated on next login');
+        }
+        
+        return true;
+      } else {
+        AppLogger.w('Failed to change password: status ${response.statusCode}');
+        if (response.data != null && response.data is Map) {
+          final error = response.data['error'];
+          if (error != null) {
+            throw Exception(error.toString());
+          }
+        }
+        return false;
+      }
+    } catch (e) {
+      AppLogger.e('Error changing password for admin ID: $adminId', e);
+      rethrow;
+    }
+  }
 }
 
 

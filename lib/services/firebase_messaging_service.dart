@@ -74,8 +74,10 @@ class FirebaseMessagingService {
       _fcmToken = await _firebaseMessaging.getToken();
       if (_fcmToken != null) {
         AppLogger.i('✅ FCM Token obtained: ${_fcmToken!.substring(0, 20)}...');
+        print('✅ FCM Token obtained: ${_fcmToken!.substring(0, 20)}...'); // Print للتحقق في Release APK
       } else {
         AppLogger.w('⚠️ FCM Token is null');
+        print('⚠️ FCM Token is null'); // Print للتحقق في Release APK
       }
 
       // الاستماع لتحديثات Token (مهم عندما يتغير Token)
@@ -203,21 +205,34 @@ class FirebaseMessagingService {
         success = await UserService().updateFcmTokenByPhone(phone, _fcmToken!);
         if (success) {
           AppLogger.i('✅ FCM Token sent to server for user phone: $phone');
+          print('✅ FCM Token sent to server for user phone: $phone'); // Print للتحقق في Release APK
+        } else {
+          AppLogger.w('⚠️ Failed to send FCM Token to server for user phone: $phone');
+          print('⚠️ Failed to send FCM Token to server for user phone: $phone'); // Print للتحقق في Release APK
         }
       } else if (driverId != null && driverId.isNotEmpty) {
         // إرسال Token للسائق
         success = await DriverService().updateFcmTokenByDriverId(driverId, _fcmToken!);
         if (success) {
           AppLogger.i('✅ FCM Token sent to server for driver: $driverId');
+          print('✅ FCM Token sent to server for driver: $driverId'); // Print للتحقق في Release APK
+        } else {
+          AppLogger.w('⚠️ Failed to send FCM Token to server for driver: $driverId');
+          print('⚠️ Failed to send FCM Token to server for driver: $driverId'); // Print للتحقق في Release APK
         }
       } else if (userId != null && userId.isNotEmpty) {
         // إرسال Token للمستخدم بـ ID
         success = await UserService().updateFcmToken(userId, _fcmToken!);
         if (success) {
           AppLogger.i('✅ FCM Token sent to server for user ID: $userId');
+          print('✅ FCM Token sent to server for user ID: $userId'); // Print للتحقق في Release APK
+        } else {
+          AppLogger.w('⚠️ Failed to send FCM Token to server for user ID: $userId');
+          print('⚠️ Failed to send FCM Token to server for user ID: $userId'); // Print للتحقق في Release APK
         }
       } else {
         AppLogger.w('No phone, driverId, or userId provided');
+        print('⚠️ No phone, driverId, or userId provided for FCM Token'); // Print للتحقق في Release APK
         return;
       }
 

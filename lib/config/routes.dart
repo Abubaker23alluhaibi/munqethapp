@@ -28,9 +28,12 @@ import '../screens/admin/advertisements_screen.dart';
 import '../screens/admin/add_edit_advertisement_screen.dart';
 import '../screens/admin/cards_screen.dart';
 import '../screens/admin/manage_supermarket_locations_screen.dart';
+import '../screens/admin/change_password_screen.dart';
+import '../screens/driver/change_password_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/addresses_screen.dart';
 import '../screens/profile/settings_screen.dart';
+import '../screens/profile/change_password_screen.dart';
 import '../screens/profile/help_screen.dart';
 import '../screens/profile/redeem_card_screen.dart';
 import '../screens/orders/order_history_screen.dart';
@@ -88,6 +91,11 @@ class AppRouter {
         path: '/profile/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/change-password',
+        name: 'change_password',
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
       GoRoute(
         path: '/profile/help',
@@ -218,6 +226,11 @@ class AppRouter {
           return DriverOrderDetailsScreen(orderId: orderId);
         },
       ),
+      GoRoute(
+        path: '/driver/change-password',
+        name: 'driver_change_password',
+        builder: (context, state) => const DriverChangePasswordScreen(),
+      ),
       // Admin Routes
       GoRoute(
         path: '/admin/dashboard',
@@ -274,6 +287,11 @@ class AppRouter {
         path: '/admin/cards',
         name: 'admin_cards',
         builder: (context, state) => const CardsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/change-password',
+        name: 'admin_change_password',
+        builder: (context, state) => const AdminChangePasswordScreen(),
       ),
       GoRoute(
         path: '/admin/manage-supermarket-locations',

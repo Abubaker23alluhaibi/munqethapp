@@ -208,4 +208,77 @@ class UserService {
       return false;
     }
   }
+
+  // تغيير كلمة المرور للمستخدم
+  Future<bool> changePassword(String userId, String currentPassword, String newPassword) async {
+    try {
+      final response = await _apiService.put('/users/$userId/change-password', data: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+      
+      if (response.statusCode == 200) {
+        AppLogger.i('✅ Password changed successfully for user ID: $userId');
+        return true;
+      } else {
+        AppLogger.w('Failed to change password: status ${response.statusCode}');
+        if (response.data != null && response.data is Map) {
+          final error = response.data['error'];
+          if (error != null) {
+            throw AppException(
+              type: AppExceptionType.validation,
+              message: error.toString(),
+            );
+          }
+        }
+        return false;
+      }
+    } catch (e) {
+      AppLogger.e('Error changing password for user ID: $userId', e);
+      if (e is AppException) {
+        rethrow;
+      }
+      throw AppException(
+        type: AppExceptionType.network,
+        message: 'حدث خطأ أثناء تغيير كلمة المرور',
+      );
+    }
+  }
+
+  // تغيير كلمة المرور للمستخدم برقم الهاتف
+  Future<bool> changePasswordByPhone(String phone, String currentPassword, String newPassword) async {
+    try {
+      final normalizedPhone = PhoneUtils.normalizePhone(phone);
+      final response = await _apiService.put('/users/phone/$normalizedPhone/change-password', data: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+      
+      if (response.statusCode == 200) {
+        AppLogger.i('✅ Password changed successfully for user phone: $normalizedPhone');
+        return true;
+      } else {
+        AppLogger.w('Failed to change password: status ${response.statusCode}');
+        if (response.data != null && response.data is Map) {
+          final error = response.data['error'];
+          if (error != null) {
+            throw AppException(
+              type: AppExceptionType.validation,
+              message: error.toString(),
+            );
+          }
+        }
+        return false;
+      }
+    } catch (e) {
+      AppLogger.e('Error changing password for user phone: $phone', e);
+      if (e is AppException) {
+        rethrow;
+      }
+      throw AppException(
+        type: AppExceptionType.network,
+        message: 'حدث خطأ أثناء تغيير كلمة المرور',
+      );
+    }
+  }
 }

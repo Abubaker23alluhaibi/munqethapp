@@ -548,6 +548,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Colors.green.shade600,
           () => context.push('/admin/cards'),
         ),
+        const SizedBox(height: 12),
+        _buildActionCard(
+          'تغيير كلمة المرور',
+          'تغيير كلمة المرور الخاصة بك',
+          Icons.lock_rounded,
+          Colors.orange.shade600,
+          () => context.push('/admin/change-password'),
+        ),
       ],
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../core/storage/secure_storage_service.dart';
+import 'change_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -73,6 +75,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // TODO: تطبيق Dark Mode
                 },
                 activeColor: AppTheme.primaryColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Change Password
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.lock_rounded,
+                  color: AppTheme.primaryColor,
+                ),
+                title: const Text('تغيير كلمة المرور'),
+                subtitle: const Text('تغيير كلمة المرور الخاصة بك'),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                onTap: () {
+                  context.push('/profile/change-password');
+                },
               ),
             ),
           ],

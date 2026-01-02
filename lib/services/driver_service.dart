@@ -200,6 +200,48 @@ class DriverService {
     }
   }
 
+  // العثور على أقرب 4 سائقين للعميل مع المسافات (استخدام API)
+  Future<Map<String, dynamic>> findNearestDriversWithDistances(double customerLat, double customerLng, String serviceType, {int limit = 4}) async {
+    try {
+      final response = await _apiService.get('/drivers/nearest', queryParameters: {
+        'latitude': customerLat.toString(),
+        'longitude': customerLng.toString(),
+        'serviceType': serviceType,
+        'limit': limit.toString(),
+      });
+      
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        // API returns { drivers: [...], distances: [...] }
+        final List<Driver> drivers = [];
+        final List<double> distances = [];
+        
+        if (data['drivers'] != null) {
+          final List<dynamic> driversList = data['drivers'];
+          drivers.addAll(
+            driversList.map((json) => Driver.fromJson(json as Map<String, dynamic>))
+          );
+        }
+        
+        if (data['distances'] != null) {
+          final List<dynamic> distancesList = data['distances'];
+          distances.addAll(
+            distancesList.map((d) => (d as num).toDouble())
+          );
+        }
+        
+        return {
+          'drivers': drivers,
+          'distances': distances,
+        };
+      }
+      return {'drivers': <Driver>[], 'distances': <double>[]};
+    } catch (e) {
+      AppLogger.e('Error finding nearest drivers with distances', e);
+      return {'drivers': <Driver>[], 'distances': <double>[]};
+    }
+  }
+
   // الحصول على سائق بالـ ID
   Future<Driver?> getDriverById(String id) async {
     try {
@@ -290,6 +332,44 @@ class DriverService {
       AppLogger.e('   Error type: ${e.runtimeType}');
       AppLogger.e('   Error message: ${e.toString()}');
       return false;
+    }
+  }
+
+  // تغيير كلمة المرور (الرمز) للسائق
+  Future<bool> changePassword(String driverId, String currentPassword, String newPassword) async {
+    try {
+      AppLogger.d('Changing password for driver ID: $driverId');
+      
+      final response = await _apiService.put('/drivers/$driverId/change-password', data: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+      
+      if (response.statusCode == 200) {
+        AppLogger.i('✅ Password changed successfully for driver ID: $driverId');
+        
+        // تحديث البيانات المحلية إذا كان هذا السائق هو المسجل دخوله
+        final currentDriver = await getCurrentDriver();
+        if (currentDriver != null && currentDriver.id == driverId) {
+          final updatedDriver = currentDriver.copyWith(code: newPassword);
+          await SecureStorageService.setString(_storageKey, jsonEncode(updatedDriver.toJson()));
+          AppLogger.d('Updated local driver data with new password');
+        }
+        
+        return true;
+      } else {
+        AppLogger.w('Failed to change password: status ${response.statusCode}');
+        if (response.data != null && response.data is Map) {
+          final error = response.data['error'];
+          if (error != null) {
+            throw Exception(error.toString());
+          }
+        }
+        return false;
+      }
+    } catch (e) {
+      AppLogger.e('Error changing password for driver ID: $driverId', e);
+      rethrow;
     }
   }
 }

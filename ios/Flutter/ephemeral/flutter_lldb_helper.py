@@ -18,7 +18,7 @@ def handle_new_rx_page(frame: lldb.SBFrame, bp_loc, extra_args, intern_dict):
     error = lldb.SBError()
     frame.GetThread().GetProcess().WriteMemory(base, data, error)
     if not error.Success():
-        print(f'Failed to write into {base}[+{page_len}]', error)
+        AppLogger.e(f'Failed to write into {base}[+{page_len}]', error)
         return
 
 def __lldb_init_module(debugger: lldb.SBDebugger, _):
@@ -29,4 +29,4 @@ def __lldb_init_module(debugger: lldb.SBDebugger, _):
     bp = target.BreakpointCreateByRegex("^NOTIFY_DEBUGGER_ABOUT_RX_PAGES$")
     bp.SetScriptCallbackFunction('{}.handle_new_rx_page'.format(__name__))
     bp.SetAutoContinue(True)
-    print("-- LLDB integration loaded --")
+    AppLogger.d("-- LLDB integration loaded --")

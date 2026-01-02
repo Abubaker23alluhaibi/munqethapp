@@ -572,6 +572,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           AppTheme.secondaryColor,
           () => context.push('/driver/my-orders'),
         ),
+        const SizedBox(height: 12),
+        _buildActionCard(
+          'تغيير كلمة المرور',
+          'تغيير كلمة المرور الخاصة بك',
+          Icons.lock_rounded,
+          Colors.orange.shade600,
+          () => context.push('/driver/change-password'),
+        ),
       ],
     );
   }

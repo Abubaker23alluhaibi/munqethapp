@@ -195,3 +195,4 @@ FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.c
 
 **بعد إكمال هذه الخطوات، الإشعارات الخارجية يجب أن تعمل بشكل صحيح! 🎉**
 
+

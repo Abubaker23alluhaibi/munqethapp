@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:video_player/video_player.dart';
 import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../models/driver.dart';
@@ -784,7 +785,104 @@ class _TaxiScreenState extends State<TaxiScreen> {
       _isSubmitting = true;
     });
 
+    // Show loading dialog with image when searching for drivers FIRST
+    if (!mounted) return;
+    
+    // Show dialog immediately with image and search message
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _TaxiLoadingWidget(),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'جاري البحث عن أقرب تكسي',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+          ),
+        );
+      },
+    );
+    
+    // Give time for dialog to fully render
+    await Future.delayed(const Duration(milliseconds: 300));
+
     try {
+      final driverService = DriverService();
+      
+      // Find nearest 4 drivers with distances
+      final driversResult = await driverService.findNearestDriversWithDistances(
+        _pickupLocation!.latitude,
+        _pickupLocation!.longitude,
+        'taxi',
+        limit: 4,
+      );
+      
+      final nearestDrivers = driversResult['drivers'] as List<Driver>;
+      final distances = driversResult['distances'] as List<double>;
+      
+      // Close loading dialog first
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      // Check if there's a driver within 3km
+      if (nearestDrivers.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('لا يوجد تكسي متاح حالياً. الرجاء المحاولة لاحقاً'),
+              backgroundColor: AppTheme.errorColor,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Check if nearest driver is within 3 km
+      final nearestDistance = distances.isNotEmpty ? distances[0] : null;
+      if (nearestDistance == null || nearestDistance > 3.0) {
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('لا يوجد تكسي متاح ضمن مسافة 3 كيلومتر. الرجاء المحاولة لاحقاً'),
+              backgroundColor: AppTheme.errorColor,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Driver found within 3km - continue to send request
       final orderId = 'TAXI${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       final fare = _calculateFare();
 
@@ -813,54 +911,66 @@ class _TaxiScreenState extends State<TaxiScreen> {
       // Show success dialog
       await showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle, color: AppTheme.successColor, size: 32),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  'تم إرسال الطلب',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
+        barrierDismissible: false,
+        builder: (context) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: AppTheme.successColor, size: 32),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'تم إرسال الطلب',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                 ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('تم إرسال طلبك بنجاح'),
+                const SizedBox(height: 8),
+                Text('رقم الطلب: $orderId'),
+                const SizedBox(height: 8),
+                Text('التكلفة المقدرة: ${fare.toStringAsFixed(0)} د.ع'),
+                const SizedBox(height: 8),
+                const Text('تم إرسال الطلب لأقرب تكسي - بانتظار الموافقة'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  context.push('/orders/history');
+                },
+                child: const Text('حسناً'),
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('تم إرسال طلبك بنجاح'),
-              const SizedBox(height: 8),
-              Text('رقم الطلب: $orderId'),
-              const SizedBox(height: 8),
-              Text('التكلفة المقدرة: ${fare.toStringAsFixed(0)} د.ع'),
-              const SizedBox(height: 8),
-              const Text('في انتظار الموافقة'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('حسناً'),
-            ),
-          ],
         ),
       );
     } catch (e) {
       if (mounted) {
+        // Close loading dialog if still open
+        try {
+          Navigator.of(context).pop();
+        } catch (_) {
+          // Dialog might not be open, ignore
+        }
         setState(() {
           _isSubmitting = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('حدث خطأ: $e'),
+            content: Text('حدث خطأ أثناء البحث عن التكسي: $e'),
             backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -1198,7 +1308,7 @@ class _TaxiScreenState extends State<TaxiScreen> {
                                     const Icon(Icons.check_circle_rounded, size: 20),
                                     const SizedBox(width: 6),
                                     const Text(
-                                      'موافق وإرسال الطلب',
+                                      'موافق',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -1219,3 +1329,261 @@ class _TaxiScreenState extends State<TaxiScreen> {
   }
 
 }
+
+// Widget لعرض الفيديو MP4
+class _VideoPlayerWidget extends StatefulWidget {
+  final String videoPath;
+  final double height;
+  final double width;
+
+  const _VideoPlayerWidget({
+    required this.videoPath,
+    required this.height,
+    required this.width,
+  });
+
+  @override
+  State<_VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
+}
+
+class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
+  VideoPlayerController? _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      _controller = VideoPlayerController.asset(widget.videoPath);
+      await _controller!.initialize();
+      _controller!.setLooping(true);
+      _controller!.play();
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError) {
+      return SizedBox(
+        height: widget.height,
+        width: widget.width,
+        child: const Icon(
+          Icons.local_taxi,
+          size: 120,
+          color: AppTheme.primaryColor,
+        ),
+      );
+    }
+
+    if (!_isInitialized || _controller == null) {
+      return SizedBox(
+        height: widget.height,
+        width: widget.width,
+        child: const Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: widget.height,
+      width: widget.width,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox(
+          width: _controller!.value.size.width,
+          height: _controller!.value.size.height,
+          child: VideoPlayer(_controller!),
+        ),
+      ),
+    );
+  }
+}
+
+// Widget لعرض التكسي المتحرك مع اللمبات والخطوط
+class _TaxiLoadingWidget extends StatefulWidget {
+  const _TaxiLoadingWidget();
+
+  @override
+  State<_TaxiLoadingWidget> createState() => _TaxiLoadingWidgetState();
+}
+
+class _TaxiLoadingWidgetState extends State<_TaxiLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _rotationController;
+  late AnimationController _lightController;
+  late Animation<double> _lightAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Animation لحركة التكسي (الأمام والخلف)
+    _rotationController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    // Animation لللمبات والخطوط (تنطفئ وتشتغل)
+    _lightController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _lightAnimation = Tween<double>(
+      begin: 0.3,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _lightController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    _lightController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      width: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // الصورة المتحركة (تتحرك كأنها تمشي)
+          AnimatedBuilder(
+            animation: _rotationController,
+            builder: (context, child) {
+              // حركة أفقية للأمام والخلف
+              final horizontalOffset = math.sin(_rotationController.value * 2 * math.pi) * 15;
+              // حركة عمودية خفيفة (كأنها على طريق)
+              final verticalOffset = math.sin(_rotationController.value * 4 * math.pi) * 3;
+              // دوران خفيف
+              final rotation = math.sin(_rotationController.value * 2 * math.pi) * 0.05;
+              
+              return Transform.translate(
+                offset: Offset(horizontalOffset, verticalOffset),
+                child: Transform.rotate(
+                  angle: rotation,
+                  child: Image.asset(
+                    'assets/images/taxiLaod.png',
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // 3 لمبات صغيرة فوق الصورة
+          Positioned(
+            top: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(3, (index) {
+                return AnimatedBuilder(
+                  animation: _lightAnimation,
+                  builder: (context, child) {
+                    // تأخير لكل لمبة
+                    final delay = index * 0.2;
+                    final adjustedValue = (_lightController.value + delay) % 1.0;
+                    final opacity = adjustedValue < 0.5 
+                        ? (adjustedValue * 2) 
+                        : (2 - adjustedValue * 2);
+                    
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.primaryColor.withOpacity(opacity),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryColor.withOpacity(opacity * 0.8),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              }),
+            ),
+          ),
+          
+          // 3 خطوط مستقيمة باللون الأزرق تحت الصورة (تتحرك كموجة)
+          Positioned(
+            bottom: 10,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(3, (index) {
+                return AnimatedBuilder(
+                  animation: _lightController,
+                  builder: (context, child) {
+                    // تأخير لكل خط لإنشاء تأثير الموجة
+                    final delay = index * 0.2;
+                    final adjustedValue = (_lightController.value + delay) % 1.0;
+                    // ارتفاع الخط يتغير من 8 إلى 20
+                    final height = 8 + (adjustedValue < 0.5 
+                        ? (adjustedValue * 2 * 12) 
+                        : ((2 - adjustedValue * 2) * 12));
+                    
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: 4,
+                      height: height,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryColor.withOpacity(0.5),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
