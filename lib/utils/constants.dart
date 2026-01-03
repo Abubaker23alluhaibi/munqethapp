@@ -1,15 +1,6 @@
 class AppConstants {
   // API Endpoints
-  // TODO: تحديث هذا الرابط إلى رابط API الحقيقي عند نشر السيرفر
-  // للتطوير المحلي على المحاكي: http://localhost:3000/api
-  // للتطوير المحلي على الجهاز الحقيقي: http://[YOUR_IP_ADDRESS]:3000/api
-  // للإنتاج: https://your-api-domain.com
-  // 
-  // ⚠️ مهم: استبدل [YOUR_IP_ADDRESS] بـ IP address الكمبيوتر
-  // لمعرفة IP address: Windows: ipconfig | Linux/Mac: ifconfig
-  // مثال: http://192.168.1.100:3000/api
-  // 
-  // ✅ تم تحديثه إلى Railway Production Server (Backend منفصل)
+  // Production Server URL
   static const String baseUrl = 'https://munqethser-production.up.railway.app/api';
   
   // API Timeouts

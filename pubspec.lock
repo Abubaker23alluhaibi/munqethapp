@@ -504,14 +504,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.5"
-  get_it:
-    dependency: "direct main"
-    description:
-      name: get_it
-      sha256: d85128a5dae4ea777324730dc65edd9c9f43155c109d5cc0a69cab74139fbac1
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.7.0"
   go_router:
     dependency: "direct main"
     description:
@@ -960,14 +952,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
-  skeleton_text:
-    dependency: "direct main"
-    description:
-      name: skeleton_text
-      sha256: bacd536bf0664efe1cae53bcbd78c3d4040a120f300f69dc85d83f358471cc6c
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.1"
   sky_engine:
     dependency: transitive
     description: flutter

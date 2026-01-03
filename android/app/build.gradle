@@ -17,18 +17,11 @@ if (localPropertiesFile.exists()) {
 // Load keystore properties securely
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('keystore.properties')
-if (keystorePropertiesFile.exists()) {
+def hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
     keystorePropertiesFile.withReader('UTF-8') { reader ->
         keystoreProperties.load(reader)
     }
-} else {
-    // ⚠️ ERROR: keystore.properties file is missing!
-    // Please create android/keystore.properties with the following properties:
-    // storeFile=your_keystore_file.keystore
-    // storePassword=your_store_password
-    // keyAlias=your_key_alias
-    // keyPassword=your_key_password
-    throw new GradleException("keystore.properties file is missing! Please create it with your keystore credentials.")
 }
 
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
@@ -70,17 +63,29 @@ android {
     }
 
     signingConfigs {
-        release {
-            storeFile file(keystoreProperties['storeFile'] ?: 'munqeth.keystore')
-            storePassword keystoreProperties['storePassword'] ?: ''
-            keyAlias keystoreProperties['keyAlias'] ?: 'munqeth'
-            keyPassword keystoreProperties['keyPassword'] ?: ''
+        if (hasKeystore) {
+            release {
+                storeFile file(keystoreProperties['storeFile'] ?: 'munqeth.keystore')
+                storePassword keystoreProperties['storePassword'] ?: ''
+                keyAlias keystoreProperties['keyAlias'] ?: 'munqeth'
+                keyPassword keystoreProperties['keyPassword'] ?: ''
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            } else {
+                // ⚠️ WARNING: Building release without keystore!
+                // For production release, create android/keystore.properties with:
+                // storeFile=munqeth.keystore
+                // storePassword=YOUR_STORE_PASSWORD
+                // keyAlias=munqeth
+                // keyPassword=YOUR_KEY_PASSWORD
+                println("⚠️ WARNING: Building release APK without keystore signing!")
+            }
             // ProGuard rules for release builds
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             // Enable code shrinking, obfuscation, and optimization

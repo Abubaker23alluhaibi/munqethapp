@@ -8,7 +8,6 @@ import 'services/local_notification_service.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/socket_service.dart';
 import 'providers/app_providers.dart';
-import 'providers/auth_provider.dart';
 import 'core/utils/app_logger.dart';
 
 void main() async {
@@ -18,10 +17,8 @@ void main() async {
   try {
     await Firebase.initializeApp();
     AppLogger.i('✅ Firebase initialized');
-    print('✅ Firebase initialized'); // Print للتحقق في Release APK
   } catch (e, stackTrace) {
     AppLogger.e('❌ Error initializing Firebase', e, stackTrace);
-    print('❌ Error initializing Firebase: $e'); // Print للتحقق في Release APK
     // يمكن المتابعة بدون Firebase إذا لم يكن متوفراً
   }
   
@@ -34,10 +31,8 @@ void main() async {
   // تهيئة Firebase Messaging (للإشعارات الخارجية - عندما يكون التطبيق مغلق)
   FirebaseMessagingService().initialize().then((_) {
     AppLogger.i('✅ FirebaseMessagingService initialized');
-    print('✅ FirebaseMessagingService initialized'); // Print للتحقق في Release APK
   }).catchError((error, stackTrace) {
     AppLogger.e('❌ Error initializing FirebaseMessagingService', error, stackTrace);
-    print('❌ Error initializing FirebaseMessagingService: $error'); // Print للتحقق في Release APK
   });
   
   // تهيئة Local Notifications (للإشعارات المحلية - عندما يكون التطبيق مفتوح)
@@ -63,8 +58,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  BuildContext? _appContext;
-
   @override
   void initState() {
     super.initState();
@@ -114,9 +107,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       providers: AppProviders.providers,
       child: Builder(
         builder: (context) {
-          // حفظ context للاستخدام في lifecycle callbacks
-          _appContext = context;
-          
           // Socket.IO سيتم تهيئته في main() - لا حاجة لـ FCM tokens
           AppLogger.d('App started - Socket.IO will handle notifications');
           

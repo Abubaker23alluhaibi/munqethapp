@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../core/storage/secure_storage_service.dart';
+import '../core/utils/app_logger.dart';
 import 'dart:convert';
 
 /// Provider لإدارة سلة التسوق
@@ -106,7 +107,7 @@ class CartProvider with ChangeNotifier {
       final json = jsonEncode(cartData);
       await SecureStorageService.setString('shopping_cart', json);
     } catch (e) {
-      debugPrint('Error saving cart: $e');
+      AppLogger.e('Error saving cart', e);
     }
   }
 
@@ -139,7 +140,7 @@ class CartProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('Error loading cart: $e');
+      AppLogger.e('Error loading cart', e);
     } finally {
       _setLoading(false);
     }

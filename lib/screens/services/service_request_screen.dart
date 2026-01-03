@@ -1458,13 +1458,15 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
     with TickerProviderStateMixin {
   late AnimationController _carController;
   late AnimationController _waterController;
+  late AnimationController _scaleController;
   late Animation<double> _carAnimation;
   late Animation<double> _waterAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
-    // Animation للسيارة (تتحرك يمين ويسار)
+    // Animation للصورة (تتحرك يمين ويسار)
     _carController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
@@ -1491,12 +1493,27 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       parent: _waterController,
       curve: Curves.easeIn,
     ));
+    
+    // Animation للتكبير والتصغير (لجعل الصورة أكثر حيوية)
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _scaleAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _scaleController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   @override
   void dispose() {
     _carController.dispose();
     _waterController.dispose();
+    _scaleController.dispose();
     super.dispose();
   }
 
@@ -1508,16 +1525,20 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // السيارة (أيقونة سيارة)
+          // صورة غسيل السيارات مع أنيميشن (حركة + تكبير/تصغير)
           AnimatedBuilder(
-            animation: _carAnimation,
+            animation: Listenable.merge([_carAnimation, _scaleAnimation]),
             builder: (context, child) {
               return Transform.translate(
                 offset: Offset(_carAnimation.value, 0),
-                child: const Icon(
-                  Icons.directions_car,
-                  size: 100,
-                  color: AppTheme.primaryColor,
+                child: Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: Image.asset(
+                    'assets/images/woshingloud.png',
+                    width: 150,
+                    height: 150,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               );
             },

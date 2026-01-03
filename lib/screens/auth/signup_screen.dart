@@ -7,7 +7,6 @@ import '../../config/theme.dart';
 import '../../widgets/animated_button.dart';
 import '../../services/storage_service.dart';
 import '../../services/user_service.dart';
-import 'dart:math';
 import '../../providers/auth_provider.dart';
 import '../../core/errors/app_exception.dart';
 import 'package:provider/provider.dart';
@@ -74,7 +73,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   // توليد رمز تأكيد عشوائي
   String _generateVerificationCode() {
-    final random = Random();
+    final random = math.Random();
     return (1000 + random.nextInt(9000)).toString(); // رقم من 4 أرقام
   }
 

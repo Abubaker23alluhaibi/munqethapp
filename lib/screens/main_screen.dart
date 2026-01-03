@@ -9,9 +9,7 @@ import '../widgets/shimmer_widget.dart';
 import '../models/advertisement.dart';
 import '../services/advertisement_service.dart';
 import '../services/storage_service.dart';
-import '../services/local_notification_service.dart';
 import '../services/socket_service.dart';
-import '../core/utils/app_logger.dart';
 import 'shopping/shopping_screen.dart';
 import 'services/services_screen.dart';
 import 'taxi/taxi_screen.dart';
@@ -26,7 +24,6 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  final _notificationService = LocalNotificationService();
   final _socketService = SocketService();
 
   final List<Widget> _screens = [

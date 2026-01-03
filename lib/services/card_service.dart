@@ -86,7 +86,8 @@ class CardService {
       });
       
       if (response.statusCode == 200) {
-        // نحفظ البطاقة كمحفظة محلية دائماً حتى يظهر الرصيد
+        // الرصيد تم إضافته إلى walletBalance في السيرفر تلقائياً
+        // نحفظ البطاقة كمحفظة محلية أيضاً للتوافق
         if (response.data != null) {
           final cardData = response.data as Map<String, dynamic>;
           await _addUserCard(canonicalPhone, Card.fromJson(cardData));
@@ -425,18 +426,36 @@ class CardService {
     }
   }
 
-  // خصم من محفظة المستخدم (للاستخدام المحلي فقط)
+  // خصم من محفظة المستخدم (من السيرفر أولاً)
   Future<bool> deductFromWallet(String userPhone, int amount) async {
     try {
-      // تطبيع رقم الهاتف بنفس الطريقة المستخدمة في redeemCard
+      // تطبيع رقم الهاتف
       final normalizedPhone = PhoneUtils.normalizePhone(userPhone);
-      final canonicalPhone = _canonicalPhone(normalizedPhone);
       AppLogger.d('Attempting to deduct $amount from wallet');
       AppLogger.d('Original phone: $userPhone');
       AppLogger.d('Normalized phone: $normalizedPhone');
-      AppLogger.d('Canonical phone: $canonicalPhone');
       
-      // تمرير الرقم المطبيع (normalized) وليس canonical لأن getUserCards يقوم بتطبيعه داخلياً
+      // محاولة الخصم من السيرفر أولاً
+      try {
+        final response = await _apiService.put('/users/phone/$normalizedPhone/wallet/deduct', data: {
+          'amount': amount,
+        });
+        
+        if (response.statusCode == 200) {
+          AppLogger.d('Successfully deducted $amount from wallet on server');
+          // تحديث التخزين المحلي أيضاً للتوافق
+          await _updateLocalCardsAfterDeduction(normalizedPhone, amount);
+          return true;
+        } else if (response.statusCode == 400) {
+          // الرصيد غير كافٍ
+          AppLogger.w('Insufficient wallet balance on server');
+          return false;
+        }
+      } catch (e) {
+        AppLogger.w('Error deducting from server wallet, trying local: $e');
+      }
+      
+      // إذا فشل الخصم من السيرفر، نستخدم الطريقة المحلية (للتوافق مع البيانات القديمة)
       final userCards = await getUserCards(normalizedPhone);
       AppLogger.d('Found ${userCards.length} cards for user');
       
@@ -462,7 +481,6 @@ class CardService {
         if (remaining <= 0) break;
         final deduct = remaining <= card.amount ? remaining : card.amount;
         AppLogger.d('Deducting $deduct from card ${card.id} (balance: ${card.amount})');
-        // استخدام normalizedPhone بدلاً من canonicalPhone
         final success = await useCardForPayment(normalizedPhone, card.id, deduct);
         if (!success) {
           AppLogger.w('Failed to deduct from card ${card.id}');
@@ -480,9 +498,62 @@ class CardService {
       return false;
     }
   }
+  
+  // تحديث البطاقات المحلية بعد الخصم (للتوافق)
+  Future<void> _updateLocalCardsAfterDeduction(String userPhone, int amount) async {
+    try {
+      final userCards = await getUserCards(userPhone);
+      if (userCards.isEmpty) return;
+      
+      int remaining = amount;
+      final sortedCards = List<UserCard>.from(userCards);
+      sortedCards.sort((a, b) => b.amount.compareTo(a.amount));
+      
+      for (final card in sortedCards) {
+        if (remaining <= 0) break;
+        final deduct = remaining <= card.amount ? remaining : card.amount;
+        final cardIndex = userCards.indexWhere((c) => c.id == card.id);
+        if (cardIndex != -1) {
+          final newAmount = card.amount - deduct;
+          if (newAmount > 0) {
+            userCards[cardIndex] = card.copyWith(
+              amount: newAmount,
+              lastUsedAt: DateTime.now(),
+            );
+          } else {
+            userCards.removeAt(cardIndex);
+          }
+        }
+        remaining -= deduct;
+      }
+      
+      await _saveUserCards(userPhone, userCards);
+    } catch (e) {
+      AppLogger.e('Error updating local cards after deduction', e);
+    }
+  }
 
-  // الحصول على رصيد محفظة المستخدم (للاستخدام المحلي فقط)
+  // الحصول على رصيد محفظة المستخدم (من السيرفر أولاً، ثم المحلي كبديل)
   Future<int> getUserWalletBalance(String userPhone) async {
+    try {
+      // محاولة جلب الرصيد من السيرفر أولاً
+      final normalizedPhone = PhoneUtils.normalizePhone(userPhone);
+      final response = await _apiService.get('/users/phone/$normalizedPhone/wallet');
+      
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        final serverBalance = data['walletBalance'] as int? ?? 0;
+        
+        // تحديث التخزين المحلي بالرصيد من السيرفر
+        // لكن نحتفظ بالبطاقات المحلية أيضاً للتوافق
+        AppLogger.d('Wallet balance from server: $serverBalance');
+        return serverBalance;
+      }
+    } catch (e) {
+      AppLogger.d('Error getting wallet balance from server, using local: $e');
+    }
+    
+    // إذا فشل جلب الرصيد من السيرفر، نستخدم الرصيد المحلي
     return await getUserCardsTotalBalance(userPhone);
   }
 

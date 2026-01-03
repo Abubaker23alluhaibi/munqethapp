@@ -1,6 +1,5 @@
 import 'package:logger/logger.dart';
 import 'package:flutter/foundation.dart';
-import 'package:dio/dio.dart';
 
 /// Logger موحد للتطبيق
 /// يستخدم Logger في debug mode فقط، ولا يطبع أي شيء في release mode

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../services/storage_service.dart';
 import '../../services/card_service.dart';
+import '../../services/user_service.dart';
 import '../../core/storage/secure_storage_service.dart';
 import 'edit_profile_screen.dart';
 
@@ -15,10 +16,12 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _cardService = CardService();
+  final _userService = UserService();
   String? _userName;
   String? _userPhone;
   String? _userAddress;
   int _walletBalance = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -28,10 +31,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserInfo() async {
     setState(() {
-      _userName = StorageService.getString('user_name') ?? 'المستخدم';
-      _userPhone = StorageService.getString('user_phone') ?? '';
-      _userAddress = StorageService.getString('user_address') ?? '';
+      _isLoading = true;
     });
+
+    try {
+      // جلب رقم الهاتف من التخزين الآمن
+      final userPhone = await SecureStorageService.getString('user_phone');
+      
+      if (userPhone != null && userPhone.isNotEmpty) {
+        // جلب بيانات المستخدم الحقيقية من قاعدة البيانات
+        final user = await _userService.getUserByPhone(userPhone);
+        
+        if (user != null && mounted) {
+          setState(() {
+            _userName = user.name; // الاسم الحقيقي من قاعدة البيانات
+            _userPhone = user.phone;
+            _userAddress = user.address ?? '';
+            _isLoading = false;
+          });
+          
+          // تحديث التخزين المحلي بالبيانات الحقيقية
+          await StorageService.setString('user_name', user.name);
+          await StorageService.setString('user_phone', user.phone);
+          if (user.address != null) {
+            await StorageService.setString('user_address', user.address!);
+          }
+        } else if (mounted) {
+          // إذا لم يتم العثور على المستخدم، استخدم البيانات المحلية كبديل
+          setState(() {
+            _userName = StorageService.getString('user_name') ?? 'المستخدم';
+            _userPhone = StorageService.getString('user_phone') ?? '';
+            _userAddress = StorageService.getString('user_address') ?? '';
+            _isLoading = false;
+          });
+        }
+      } else if (mounted) {
+        // إذا لم يكن هناك رقم هاتف، استخدم البيانات المحلية
+        setState(() {
+          _userName = StorageService.getString('user_name') ?? 'المستخدم';
+          _userPhone = StorageService.getString('user_phone') ?? '';
+          _userAddress = StorageService.getString('user_address') ?? '';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      // في حالة حدوث خطأ، استخدم البيانات المحلية
+      if (mounted) {
+        setState(() {
+          _userName = StorageService.getString('user_name') ?? 'المستخدم';
+          _userPhone = StorageService.getString('user_phone') ?? '';
+          _userAddress = StorageService.getString('user_address') ?? '';
+          _isLoading = false;
+        });
+      }
+    }
+    
     await _loadWalletBalance();
   }
 

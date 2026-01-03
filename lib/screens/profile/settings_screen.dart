@@ -72,7 +72,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _darkModeEnabled = value;
                   });
                   await SecureStorageService.setBool('dark_mode_enabled', value);
-                  // TODO: تطبيق Dark Mode
                 },
                 activeColor: AppTheme.primaryColor,
               ),

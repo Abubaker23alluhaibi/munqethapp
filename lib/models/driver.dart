@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import '../core/utils/distance_calculator.dart';
 
 class Driver {

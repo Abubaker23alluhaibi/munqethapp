@@ -49,7 +49,6 @@ class _ImageWidgetState extends State<ImageWidget> {
   Future<void> _checkFileExists() async {
     if (widget.imagePath == null || 
         widget.imagePath!.isEmpty ||
-        widget.imagePath!.startsWith('http://') ||
         widget.imagePath!.startsWith('https://')) {
       setState(() {
         _isCheckingFile = false;
@@ -83,8 +82,8 @@ class _ImageWidgetState extends State<ImageWidget> {
       return _buildErrorWidget();
     }
 
-    // إذا كانت الصورة من URL
-    if (widget.imagePath!.startsWith('http://') || widget.imagePath!.startsWith('https://')) {
+    // إذا كانت الصورة من URL (HTTPS فقط)
+    if (widget.imagePath!.startsWith('https://')) {
       return ClipRRect(
         borderRadius: widget.borderRadius ?? BorderRadius.zero,
         child: CachedNetworkImage(
