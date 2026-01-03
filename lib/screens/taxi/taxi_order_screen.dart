@@ -304,9 +304,9 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
         bool paymentProcessed = false;
 
         if (_paymentMethod == PaymentMethod.wallet) {
-          // خصم من المحفظة
-          paymentProcessed = await _cardService.deductFromWallet(userPhone, fare.toInt());
-          if (!paymentProcessed) {
+          // التحقق من الرصيد قبل إرسال الطلب (الخصم سيتم في السيرفر)
+          final walletBalance = await _cardService.getUserWalletBalance(userPhone);
+          if (walletBalance < fare.toInt()) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('الرصيد في المحفظة غير كافي'),
@@ -318,6 +318,8 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
             });
             return;
           }
+          // السيرفر سيقوم بخصم المحفظة عند إنشاء الطلب
+          paymentProcessed = true;
         } else if (_paymentMethod == PaymentMethod.card && _selectedCardId != null) {
           // خصم من البطاقة
           paymentProcessed = await _cardService.useCardForPayment(userPhone, _selectedCardId!, fare.toInt());

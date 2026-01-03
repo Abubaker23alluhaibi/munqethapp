@@ -403,9 +403,9 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
         final totalWithDelivery = cartProvider.total + (_deliveryFee ?? 0);
 
         if (_paymentMethod == PaymentMethod.wallet) {
-          // خصم من المحفظة
-          paymentProcessed = await _cardService.deductFromWallet(userPhone, totalWithDelivery.toInt());
-          if (!paymentProcessed) {
+          // التحقق من الرصيد قبل إرسال الطلب (الخصم سيتم في السيرفر)
+          final walletBalance = await _cardService.getUserWalletBalance(userPhone);
+          if (walletBalance < totalWithDelivery.toInt()) {
             ErrorHandler.showErrorSnackBar(
               context,
               null,
@@ -416,6 +416,8 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
             });
             return;
           }
+          // السيرفر سيقوم بخصم المحفظة عند إنشاء الطلب
+          paymentProcessed = true;
         } else if (_paymentMethod == PaymentMethod.card && _selectedCardId != null) {
           // خصم من البطاقة
           paymentProcessed = await _cardService.useCardForPayment(userPhone, _selectedCardId!, totalWithDelivery.toInt());
