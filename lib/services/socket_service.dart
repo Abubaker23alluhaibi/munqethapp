@@ -21,6 +21,10 @@ class SocketService {
   static const int _maxReconnectAttempts = 10;
   static const Duration _keepAliveInterval = Duration(seconds: 30);
   static const Duration _reconnectDelay = Duration(seconds: 5);
+  
+  // حفظ آخر rooms تم الانضمام لها لإعادة الانضمام عند إعادة الاتصال
+  String? _lastDriverId;
+  final Set<String> _activeOrderRooms = {};
 
   bool get isConnected => _isConnected;
   IO.Socket? get socket => _socket;
@@ -64,12 +68,30 @@ class SocketService {
   void _setupSocketListeners() {
     if (_socket == null) return;
 
+    // إزالة جميع listeners القديمة لتجنب التكرار
+    try {
+      _socket!.clearListeners();
+    } catch (e) {
+      // إذا لم يكن clearListeners متوفراً، نستخدم off() لإزالة listeners يدوياً
+      AppLogger.d('clearListeners not available, removing listeners manually');
+      _socket!.off('connect');
+      _socket!.off('disconnect');
+      _socket!.off('connect_error');
+      _socket!.off('error');
+      _socket!.off('notification');
+      _socket!.off('order:new');
+      _socket!.off('order:status:updated');
+    }
+
     _socket!.onConnect((_) {
       _isConnected = true;
       _reconnectAttempts = 0;
       AppLogger.i('✅✅✅ Socket.IO connected successfully - ready to receive notifications');
       _startKeepAlive();
       _stopReconnectTimer();
+      
+      // إعادة الانضمام للـ rooms بعد إعادة الاتصال
+      _rejoinRooms();
     });
 
     _socket!.onDisconnect((_) {
@@ -165,14 +187,37 @@ class SocketService {
 
   /// الاشتراك في driver room
   void joinDriverRoom(String driverId) {
+    _lastDriverId = driverId;
     joinRoom('driver:$driverId');
     _socket?.emit('driver:join', driverId);
   }
 
   /// الاشتراك في order room
   void joinOrderRoom(String orderId) {
+    _activeOrderRooms.add(orderId);
     joinRoom('order:$orderId');
     _socket?.emit('order:track', orderId);
+  }
+  
+  /// إعادة الانضمام للـ rooms بعد إعادة الاتصال
+  Future<void> _rejoinRooms() async {
+    if (_socket?.connected != true) return;
+    
+    AppLogger.d('🔄 Rejoining rooms after reconnection...');
+    
+    // إعادة الانضمام لـ driver room
+    if (_lastDriverId != null && _lastDriverId!.isNotEmpty) {
+      AppLogger.d('🔄 Rejoining driver room: $_lastDriverId');
+      joinDriverRoom(_lastDriverId!);
+    }
+    
+    // إعادة الانضمام لـ order rooms
+    for (final orderId in _activeOrderRooms) {
+      AppLogger.d('🔄 Rejoining order room: $orderId');
+      joinOrderRoom(orderId);
+    }
+    
+    AppLogger.d('✅ Finished rejoining rooms');
   }
 
   /// التحقق من أن طلب جديد موجه للسائق الحالي
@@ -339,9 +384,10 @@ class SocketService {
         }
       }
       
-      // إذا لم يكن هناك معلومات للفلترة، لا تعرض الإشعار (آمن أكثر)
+      // إذا لم يكن هناك معلومات للفلترة، لا تعرض الإشعار
       // لأن الإشعارات الفعلية تأتي عبر FCM مع فلترة صحيحة
-      AppLogger.w('⚠️ Order status update - no customerPhone or driverId in data, not showing (FCM handles actual notifications)');
+      // لكن إذا كان المستخدم في order room (شاشة تتبع الطلب)، سيتم تحديث UI تلقائياً
+      AppLogger.w('⚠️ Order status update - no customerPhone or driverId in data, not showing notification (UI will update if in order tracking screen)');
       return false;
     } catch (e, stackTrace) {
       AppLogger.e('Error checking if order status notification should be shown', e, stackTrace);
@@ -480,7 +526,13 @@ class SocketService {
     _socket?.dispose();
     _socket = null;
     _isConnected = false;
+    // لا نحذف _lastDriverId و _activeOrderRooms لإعادة الانضمام عند إعادة الاتصال
     AppLogger.d('Socket disconnected');
+  }
+  
+  /// إزالة order room من القائمة النشطة
+  void leaveOrderRoom(String orderId) {
+    _activeOrderRooms.remove(orderId);
   }
 }
 

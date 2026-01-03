@@ -1460,7 +1460,6 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
   late AnimationController _waterController;
   late AnimationController _scaleController;
   late Animation<double> _carAnimation;
-  late Animation<double> _waterAnimation;
   late Animation<double> _scaleAnimation;
 
   @override
@@ -1480,19 +1479,11 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       curve: Curves.easeInOut,
     ));
     
-    // Animation للماء/الرغوة (تتحرك من الأعلى للأسفل)
+    // Animation للفقاعات (تظهر وتختفي)
     _waterController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
     )..repeat();
-    
-    _waterAnimation = Tween<double>(
-      begin: -20,
-      end: 40,
-    ).animate(CurvedAnimation(
-      parent: _waterController,
-      curve: Curves.easeIn,
-    ));
     
     // Animation للتكبير والتصغير (لجعل الصورة أكثر حيوية)
     _scaleController = AnimationController(
@@ -1543,48 +1534,6 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
               );
             },
           ),
-          
-          // خطوط الماء/الرغوة (تتحرك من الأعلى للأسفل)
-          ...List.generate(5, (index) {
-            final delay = index * 0.2;
-            return Positioned(
-              top: 20 + (index * 15),
-              left: 30 + (index * 8),
-              right: 30 + (index * 8),
-              child: AnimatedBuilder(
-                animation: _waterAnimation,
-                builder: (context, child) {
-                  final adjustedValue = (_waterController.value + delay) % 1.0;
-                  final opacity = adjustedValue < 0.3 
-                      ? (adjustedValue / 0.3) 
-                      : (adjustedValue > 0.7 
-                          ? (1 - adjustedValue) / 0.3 
-                          : 1.0);
-                  
-                  return Opacity(
-                    opacity: opacity.clamp(0.0, 1.0),
-                    child: Transform.translate(
-                      offset: Offset(0, _waterAnimation.value),
-                      child: Container(
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.4),
-                              blurRadius: 4,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          }),
           
           // فقاعات صغيرة (تظهر وتختفي)
           ...List.generate(6, (index) {

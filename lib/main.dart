@@ -79,10 +79,25 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         // عندما يعود التطبيق إلى المقدمة
-        AppLogger.d('📱 App resumed - reconnecting Socket.IO...');
-        if (!socketService.isConnected) {
-          socketService.reconnect();
-        }
+        AppLogger.d('📱 App resumed - checking Socket.IO connection...');
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!socketService.isConnected) {
+            AppLogger.d('📱 Socket not connected, reconnecting...');
+            socketService.reconnect();
+          } else {
+            // حتى لو كان متصل، نتحقق من أن الاتصال نشط
+            AppLogger.d('📱 Socket connected, verifying connection...');
+            // إعادة إعداد listeners للتأكد من أنها تعمل
+            // نستخدم reconnect() لكن فقط إذا كان الاتصال غير نشط
+            final socket = socketService.socket;
+            if (socket == null || !socket.connected) {
+              AppLogger.d('📱 Socket object is null or not connected, reconnecting...');
+              socketService.reconnect();
+            } else {
+              AppLogger.d('📱 Socket is connected and active');
+            }
+          }
+        });
         break;
       case AppLifecycleState.paused:
         // عندما يذهب التطبيق إلى الخلفية

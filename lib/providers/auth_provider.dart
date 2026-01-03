@@ -9,6 +9,7 @@ import '../services/supermarket_service.dart';
 import '../services/user_service.dart';
 import '../services/socket_service.dart';
 import '../services/firebase_messaging_service.dart';
+import '../services/storage_service.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../core/utils/app_logger.dart';
 
@@ -155,9 +156,15 @@ class AuthProvider with ChangeNotifier {
       AppLogger.i('✅ User login successful - userId: ${user.id}, phone: ${user.phone}');
       _currentUser = user;
       _isUserLoggedIn = true;
-      // حفظ رقم الهاتف فقط للاستخدام اللاحق
+      // حفظ رقم الهاتف والبيانات للاستخدام اللاحق
       await SecureStorageService.setString('user_phone', phone);
       await SecureStorageService.setBool('user_logged_in', true);
+      // حفظ بيانات المستخدم في التخزين المحلي (للتوافق مع الكود القديم)
+      await StorageService.setString('user_name', user.name);
+      await StorageService.setString('user_phone', user.phone);
+      if (user.address != null && user.address!.isNotEmpty) {
+        await StorageService.setString('user_address', user.address!);
+      }
       
       _setLoading(false);
       notifyListeners();

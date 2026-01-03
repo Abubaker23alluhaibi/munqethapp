@@ -11,6 +11,11 @@ class LocalNotificationService {
 
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
+  
+  // لتتبع الإشعارات الأخيرة ومنع التكرار
+  final Map<String, int> _lastNotificationIds = {};
+  final Map<String, DateTime> _lastNotificationTimes = {};
+  static const Duration _duplicateThreshold = Duration(seconds: 3); // منع التكرار خلال 3 ثواني
 
   bool get isInitialized => _isInitialized;
 
@@ -84,6 +89,28 @@ class LocalNotificationService {
     }
   }
 
+  /// التحقق من أن الإشعار ليس مكرراً
+  bool _isDuplicate(String key, DateTime now) {
+    final lastTime = _lastNotificationTimes[key];
+    if (lastTime != null) {
+      final timeDiff = now.difference(lastTime);
+      if (timeDiff < _duplicateThreshold) {
+        AppLogger.w('🔇 Duplicate notification detected (${timeDiff.inMilliseconds}ms ago) - not showing: $key');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// إنشاء مفتاح فريد للإشعار لمنع التكرار
+  String _createNotificationKey(String title, String body, Map<String, dynamic>? data) {
+    final orderId = data?['orderId']?.toString() ?? '';
+    final type = data?['type']?.toString() ?? '';
+    final status = data?['status']?.toString() ?? '';
+    // استخدام orderId + type + status لإنشاء مفتاح فريد
+    return '${orderId}_${type}_${status}_${title}_$body';
+  }
+
   /// عرض إشعار محلي
   Future<void> showNotification({
     required String title,
@@ -96,6 +123,23 @@ class LocalNotificationService {
         AppLogger.w('LocalNotificationService not initialized, initializing now...');
         await initialize();
       }
+
+      // التحقق من التكرار
+      final notificationKey = _createNotificationKey(title, body, data);
+      final now = DateTime.now();
+      
+      if (_isDuplicate(notificationKey, now)) {
+        AppLogger.w('🔇 Skipping duplicate notification: $title - $body');
+        return;
+      }
+
+      // تحديث وقت آخر إشعار
+      _lastNotificationTimes[notificationKey] = now;
+      
+      // تنظيف الإشعارات القديمة (أكثر من دقيقة)
+      _lastNotificationTimes.removeWhere((key, time) {
+        return now.difference(time) > const Duration(minutes: 1);
+      });
 
       final androidDetails = AndroidNotificationDetails(
         'munqeth_channel',
@@ -124,7 +168,20 @@ class LocalNotificationService {
         iOS: iosDetails,
       );
 
-      final notificationId = id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
+      // إنشاء ID فريد للإشعار (استخدام orderId + type إذا كان متوفراً)
+      int notificationId;
+      if (id != null) {
+        notificationId = id;
+      } else if (data != null && data['orderId'] != null) {
+        // استخدام orderId + type لإنشاء ID فريد
+        final orderIdStr = data['orderId'].toString();
+        final typeStr = data['type']?.toString() ?? '';
+        notificationId = (orderIdStr.hashCode + typeStr.hashCode).abs() % 100000;
+      } else {
+        // استخدام timestamp مع hash من العنوان والجسم
+        notificationId = (title.hashCode + body.hashCode + now.millisecondsSinceEpoch).abs() % 100000;
+      }
+
       final payload = data != null ? data.toString() : null;
 
       await _localNotifications.show(
@@ -135,7 +192,7 @@ class LocalNotificationService {
         payload: payload,
       );
 
-      AppLogger.i('✅✅✅ Local notification shown successfully: $title - $body');
+      AppLogger.i('✅✅✅ Local notification shown successfully (ID: $notificationId): $title - $body');
     } catch (e, stackTrace) {
       AppLogger.e('Error showing local notification', e, stackTrace);
     }
