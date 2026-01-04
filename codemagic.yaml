@@ -8,35 +8,48 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
+      - name: Verify Flutter and create iOS project
+        script: |
+          cd $CM_BUILD_DIR
+          echo "=== Environment Setup ==="
+          echo "Current directory: $(pwd)"
+          echo "Flutter version:"
+          flutter --version
+          echo "Flutter doctor:"
+          flutter doctor -v
+          
+          echo "=== Preparing iOS project ==="
+          # Remove incomplete iOS project if it exists
+          if [ -d "ios/Runner.xcodeproj" ] && [ ! -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+            echo "Removing incomplete xcodeproj..."
+            rm -rf ios/Runner.xcodeproj
+          fi
+          
+          # Create iOS platform files
+          echo "Creating iOS platform files..."
+          flutter create --platforms=ios . 2>&1
+          
+          # Critical verification
+          if [ ! -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+            echo "❌ CRITICAL: project.pbxproj not found after creation"
+            echo "Directory structure:"
+            find ios -type f -name "*.pbxproj" 2>/dev/null || echo "No pbxproj files found"
+            echo "ios directory:"
+            ls -la ios/ 2>/dev/null || echo "ios directory not found"
+            if [ -d "ios/Runner.xcodeproj" ]; then
+              echo "xcodeproj contents:"
+              ls -la ios/Runner.xcodeproj/ 2>/dev/null || echo "xcodeproj is empty"
+            fi
+            exit 1
+          fi
+          
+          echo "✅ iOS project created successfully"
+          echo "Project file: ios/Runner.xcodeproj/project.pbxproj"
+          ls -lh ios/Runner.xcodeproj/project.pbxproj
       - name: Get Flutter dependencies
         script: |
           cd $CM_BUILD_DIR
           flutter pub get
-      - name: Recreate iOS project files
-        script: |
-          cd $CM_BUILD_DIR
-          echo "Current directory: $(pwd)"
-          echo "Checking iOS project structure..."
-          
-          # Always recreate iOS files to ensure they're complete
-          echo "Recreating iOS platform files..."
-          flutter create --platforms=ios .
-          
-          # Verify project structure
-          if [ -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
-            echo "✅ project.pbxproj verified"
-            ls -la ios/Runner.xcodeproj/
-          else
-            echo "❌ project.pbxproj still missing after recreation"
-            exit 1
-          fi
-          
-          # Check if Podfile exists
-          if [ ! -f "ios/Podfile" ]; then
-            echo "⚠️ Podfile missing, this might cause issues"
-          else
-            echo "✅ Podfile exists"
-          fi
       - name: Install CocoaPods dependencies
         script: |
           cd $CM_BUILD_DIR/ios
