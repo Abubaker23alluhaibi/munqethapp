@@ -1456,29 +1456,15 @@ class _CarWashLoadingWidget extends StatefulWidget {
 
 class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
     with TickerProviderStateMixin {
-  late AnimationController _carController;
   late AnimationController _waterController;
   late AnimationController _scaleController;
-  late Animation<double> _carAnimation;
+  late AnimationController _rotationController;
   late Animation<double> _scaleAnimation;
+  late Animation<double> _rotationAnimation;
 
   @override
   void initState() {
     super.initState();
-    // Animation للصورة (تتحرك يمين ويسار)
-    _carController = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat();
-    
-    _carAnimation = Tween<double>(
-      begin: -15,
-      end: 15,
-    ).animate(CurvedAnimation(
-      parent: _carController,
-      curve: Curves.easeInOut,
-    ));
-    
     // Animation للفقاعات (تظهر وتختفي)
     _waterController = AnimationController(
       duration: const Duration(milliseconds: 1200),
@@ -1498,13 +1484,27 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       parent: _scaleController,
       curve: Curves.easeInOut,
     ));
+    
+    // Animation للدوران الدائري
+    _rotationController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+    
+    _rotationAnimation = Tween<double>(
+      begin: 0,
+      end: 2 * math.pi, // 360 درجة
+    ).animate(CurvedAnimation(
+      parent: _rotationController,
+      curve: Curves.linear,
+    ));
   }
 
   @override
   void dispose() {
-    _carController.dispose();
     _waterController.dispose();
     _scaleController.dispose();
+    _rotationController.dispose();
     super.dispose();
   }
 
@@ -1516,12 +1516,12 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // صورة غسيل السيارات مع أنيميشن (حركة + تكبير/تصغير)
+          // صورة غسيل السيارات مع أنيميشن (دوران دائري + تكبير/تصغير)
           AnimatedBuilder(
-            animation: Listenable.merge([_carAnimation, _scaleAnimation]),
+            animation: Listenable.merge([_rotationAnimation, _scaleAnimation]),
             builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(_carAnimation.value, 0),
+              return Transform.rotate(
+                angle: _rotationAnimation.value,
                 child: Transform.scale(
                   scale: _scaleAnimation.value,
                   child: Image.asset(

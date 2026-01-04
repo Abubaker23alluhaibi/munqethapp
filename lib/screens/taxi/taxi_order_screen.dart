@@ -1081,23 +1081,24 @@ class _CraneLoadingWidgetState extends State<_CraneLoadingWidget>
     with TickerProviderStateMixin {
   late AnimationController _controller;
   late AnimationController _hookController;
-  late Animation<double> _animation;
+  late Animation<double> _horizontalAnimation;
   late Animation<double> _hookAnimation;
 
   @override
   void initState() {
     super.initState();
+    // Animation للكرين (يمشي من اليسار إلى اليمين بسرعة)
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 800), // سريع
       vsync: this,
     )..repeat();
     
-    _animation = Tween<double>(
-      begin: -0.1,
-      end: 0.1,
+    _horizontalAnimation = Tween<double>(
+      begin: -80, // يبدأ من اليسار
+      end: 80,     // ينتهي في اليمين
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeInOut,
+      curve: Curves.linear, // حركة خطية سلسة
     ));
     
     // Animation للخطاف (يتحرك للأعلى والأسفل)
@@ -1130,20 +1131,17 @@ class _CraneLoadingWidgetState extends State<_CraneLoadingWidget>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // الصورة المتحركة
+          // الكرين يتحرك من اليسار إلى اليمين بسرعة
           AnimatedBuilder(
-            animation: _animation,
+            animation: _horizontalAnimation,
             builder: (context, child) {
               return Transform.translate(
-                offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
-                child: Transform.rotate(
-                  angle: _animation.value * 0.1,
-                  child: Image.asset(
-                    'assets/images/craneloud.png',
-                    height: 120,
-                    width: 120,
-                    fit: BoxFit.contain,
-                  ),
+                offset: Offset(_horizontalAnimation.value, 0), // حركة أفقية فقط
+                child: Image.asset(
+                  'assets/images/craneloud.png',
+                  height: 120,
+                  width: 120,
+                  fit: BoxFit.contain,
                 ),
               );
             },
