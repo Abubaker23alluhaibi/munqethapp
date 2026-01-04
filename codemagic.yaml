@@ -49,7 +49,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - bake16t@gmail.com
         notify:
           success: true
           failure: true
