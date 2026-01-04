@@ -1,0 +1,43 @@
+workflows:
+  ios-workflow:
+    name: iOS Workflow
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Get Flutter dependencies
+        script: |
+          flutter pub get
+      - name: Recreate iOS project files if missing
+        script: |
+          cd $CM_BUILD_DIR
+          # Check if iOS project files exist
+          if [ ! -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+            echo "⚠️ iOS project files missing, recreating..."
+            flutter create --platforms=ios .
+            echo "✅ iOS project files recreated"
+          else
+            echo "✅ iOS project files exist"
+          fi
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios
+          pod install
+          cd ..
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign
+    artifacts:
+      - build/ios/iphoneos/*.app
+      - build/ios/iphoneos/*.ipa
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+
