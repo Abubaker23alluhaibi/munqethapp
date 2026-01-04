@@ -10,22 +10,17 @@ workflows:
     scripts:
       - name: Get Flutter dependencies
         script: |
-          flutter pub get
-      - name: Check and recreate iOS project files
-        script: |
-          echo "Checking iOS project structure..."
           cd $CM_BUILD_DIR
-          pwd
-          ls -la ios/ || echo "ios directory not found"
+          flutter pub get
+      - name: Recreate iOS project files
+        script: |
+          cd $CM_BUILD_DIR
+          echo "Current directory: $(pwd)"
+          echo "Checking iOS project structure..."
           
-          # Check if project.pbxproj exists
-          if [ ! -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
-            echo "⚠️ iOS project.pbxproj missing, recreating iOS files..."
-            flutter create --platforms=ios .
-            echo "✅ iOS project files recreated"
-          else
-            echo "✅ iOS project.pbxproj exists"
-          fi
+          # Always recreate iOS files to ensure they're complete
+          echo "Recreating iOS platform files..."
+          flutter create --platforms=ios .
           
           # Verify project structure
           if [ -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
@@ -35,17 +30,48 @@ workflows:
             echo "❌ project.pbxproj still missing after recreation"
             exit 1
           fi
+          
+          # Check if Podfile exists
+          if [ ! -f "ios/Podfile" ]; then
+            echo "⚠️ Podfile missing, this might cause issues"
+          else
+            echo "✅ Podfile exists"
+          fi
       - name: Install CocoaPods dependencies
         script: |
-          cd ios
-          pod install
+          cd $CM_BUILD_DIR/ios
+          pod install --repo-update
           cd ..
-      - name: Build iOS
+      - name: Build iOS IPA
         script: |
+          cd $CM_BUILD_DIR
+          
+          # Build iOS app
           flutter build ios --release --no-codesign
+          
+          # Verify app was built
+          if [ ! -d "build/ios/iphoneos/Runner.app" ]; then
+            echo "❌ Runner.app not found"
+            exit 1
+          fi
+          
+          echo "✅ iOS build completed successfully"
+          
+          # Create IPA directory structure
+          mkdir -p build/ios/ipa/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          
+          # Create IPA file
+          cd build/ios/ipa
+          zip -r Runner.ipa Payload
+          cd $CM_BUILD_DIR
+          
+          echo "✅ IPA file created"
+          ls -la build/ios/ipa/
     artifacts:
       - build/ios/iphoneos/*.app
       - build/ios/iphoneos/*.ipa
+      - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
