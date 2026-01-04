@@ -69,6 +69,7 @@ git ls-files ios/Runner.xcodeproj/project.pbxproj ios/Podfile ios/Runner/Info.pl
 
 ### الملفات المطلوبة:
 - `ios/Runner.xcodeproj/project.pbxproj` (مهم جداً!)
+- `ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme` (مهم للـ schemes!)
 - `ios/Podfile`
 - `ios/Runner/Info.plist`
 - `ios/Runner/AppDelegate.swift`

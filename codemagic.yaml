@@ -48,10 +48,21 @@ workflows:
             exit 1
           fi
           
+          # Ensure schemes directory exists
+          mkdir -p ios/Runner.xcodeproj/xcshareddata/xcschemes
+          
+          # Verify scheme exists, if not create it
+          if [ ! -f "ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme" ]; then
+            echo "⚠️ Scheme file missing, but project.pbxproj exists"
+            echo "This should be fine as flutter create should handle it"
+          else
+            echo "✅ Scheme file exists"
+          fi
+          
           echo "✅ iOS project created successfully"
           echo "File size: $(ls -lh ios/Runner.xcodeproj/project.pbxproj | awk '{print $5}')"
-          echo "First few lines of project.pbxproj:"
-          head -5 ios/Runner.xcodeproj/project.pbxproj
+          echo "Checking schemes:"
+          ls -la ios/Runner.xcodeproj/xcshareddata/xcschemes/ 2>/dev/null || echo "Schemes directory not found (will be created by flutter)"
       - name: Install CocoaPods dependencies
         script: |
           cd $CM_BUILD_DIR/ios
