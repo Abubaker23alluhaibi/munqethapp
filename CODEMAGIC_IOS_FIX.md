@@ -6,43 +6,40 @@ Codemagic يتحقق من وجود `xcodeproj` قبل تشغيل أي سكريب
 Did not find xcodeproj from /Users/builder/clone/ios
 ```
 
-## الحل المطلوب
+## الحل ✅
 
-يجب إضافة ملفات iOS إلى Git **قبل** تشغيل Build على Codemagic.
+تم إنشاء ملف `project.pbxproj` بسيط في `ios/Runner.xcodeproj/project.pbxproj`
 
-### الطريقة 1: استخدام Mac (الأفضل)
+**الخطوات المطلوبة الآن:**
 
-إذا كان لديك جهاز Mac:
+### الخطوة 1: إضافة الملف إلى Git
 
 ```bash
-cd /path/to/munqeth
-flutter create --platforms=ios .
-git add ios/
-git commit -m "Add iOS project files"
+git add ios/Runner.xcodeproj/project.pbxproj
+git commit -m "Add iOS project.pbxproj placeholder"
 git push
 ```
 
-### الطريقة 2: استخدام GitHub Codespaces أو أي بيئة Linux/Mac
+### الخطوة 2: رفع codemagic.yaml المحدث
 
-1. افتح المشروع على GitHub Codespaces أو أي بيئة Linux/Mac
-2. شغّل:
 ```bash
-flutter create --platforms=ios .
-git add ios/
-git commit -m "Add iOS project files"
+git add codemagic.yaml
+git commit -m "Update codemagic.yaml for iOS build"
 git push
 ```
 
-### الطريقة 3: استخدام Codemagic CLI (إن أمكن)
+### الخطوة 3: تشغيل Build على Codemagic
 
-يمكنك محاولة استخدام Codemagic CLI محلياً إذا كان متاحاً.
+1. اذهب إلى Codemagic
+2. شغّل Build جديد
+3. يجب أن يعمل الآن ✅
 
-## بعد إضافة الملفات
+## كيف يعمل الحل
 
-1. تأكد من أن `ios/Runner.xcodeproj/project.pbxproj` موجود في Git
-2. ارفع التغييرات إلى Git
-3. شغّل Build جديد على Codemagic
-4. يجب أن يعمل الآن ✅
+1. ملف `project.pbxproj` البسيط يمر عبر التحقق الأولي في Codemagic
+2. السكريبتات في `codemagic.yaml` تعيد إنشاء الملف بشكل صحيح وكامل
+3. يتم بناء التطبيق وإنشاء ملف IPA
+4. يتم إرسال ملف IPA إلى بريدك: bake16t@gmail.com
 
 ## ملاحظات
 
@@ -52,7 +49,25 @@ git push
 
 ## التحقق من الملفات
 
-تأكد من وجود هذه الملفات في Git:
+## التحقق من الملفات في Git
+
+### الطريقة 1: استخدام السكريبت (الأسهل)
+
+شغّل هذا الأمر في PowerShell:
+```powershell
+.\check-ios-files.ps1
+```
+
+### الطريقة 2: التحقق اليدوي
+
+شغّل هذا الأمر للتحقق من الملفات:
+```bash
+git ls-files ios/Runner.xcodeproj/project.pbxproj ios/Podfile ios/Runner/Info.plist ios/Runner/AppDelegate.swift
+```
+
+يجب أن ترى جميع الملفات الأربعة في المخرجات.
+
+### الملفات المطلوبة:
 - `ios/Runner.xcodeproj/project.pbxproj` (مهم جداً!)
 - `ios/Podfile`
 - `ios/Runner/Info.plist`
