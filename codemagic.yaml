@@ -31,20 +31,14 @@ workflows:
           echo "=== Step 1: Checking current state ==="
           echo "Current directory: $(pwd)"
           
-          # Check if iOS directory exists and what's in it
-          if [ -d "ios" ]; then
-            echo "iOS directory exists"
-            if [ -d "ios/Runner.xcodeproj" ]; then
-              if [ -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
-                echo "✅ project.pbxproj already exists"
-              else
-                echo "⚠️ xcodeproj exists but project.pbxproj is missing"
-                rm -rf ios/Runner.xcodeproj
-              fi
-            fi
+          # Always remove existing iOS project to let flutter create it fresh and properly
+          if [ -d "ios/Runner.xcodeproj" ]; then
+            echo "⚠️ Removing existing xcodeproj to let flutter create fresh one"
+            rm -rf ios/Runner.xcodeproj
           fi
           
           echo "=== Step 2: Creating iOS platform files ==="
+          # Always recreate iOS files to ensure they're complete and valid
           flutter create --platforms=ios . 2>&1 | head -50
           
           echo "=== Step 3: Verifying iOS project ==="
