@@ -1343,18 +1343,21 @@ class _CarEmergencyLoadingWidget extends StatefulWidget {
 class _CarEmergencyLoadingWidgetState extends State<_CarEmergencyLoadingWidget>
     with TickerProviderStateMixin {
   late AnimationController _controller;
+  late AnimationController _rotationController;
   late AnimationController _sparkController;
   late Animation<double> _animation;
+  late Animation<double> _rotationAnimation;
   late Animation<double> _sparkAnimation;
 
   @override
   void initState() {
     super.initState();
+    // حركة جانبية طفيفة + موجة رأسية
     _controller = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     )..repeat();
-    
+
     _animation = Tween<double>(
       begin: -0.1,
       end: 0.1,
@@ -1362,13 +1365,27 @@ class _CarEmergencyLoadingWidgetState extends State<_CarEmergencyLoadingWidget>
       parent: _controller,
       curve: Curves.easeInOut,
     ));
-    
+
+    // دوران كامل 360 درجة حول مركز الصورة
+    _rotationController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+
+    _rotationAnimation = Tween<double>(
+      begin: 0,
+      end: 2 * math.pi,
+    ).animate(CurvedAnimation(
+      parent: _rotationController,
+      curve: Curves.linear,
+    ));
+
     // Animation للشرارة (تظهر وتختفي)
     _sparkController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     )..repeat(reverse: true);
-    
+
     _sparkAnimation = Tween<double>(
       begin: 0.3,
       end: 1.0,
@@ -1381,6 +1398,7 @@ class _CarEmergencyLoadingWidgetState extends State<_CarEmergencyLoadingWidget>
   @override
   void dispose() {
     _controller.dispose();
+    _rotationController.dispose();
     _sparkController.dispose();
     super.dispose();
   }
@@ -1393,25 +1411,37 @@ class _CarEmergencyLoadingWidgetState extends State<_CarEmergencyLoadingWidget>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // الصورة المتحركة
+          // الصورة الأساسية ثابتة مع حركة تمايل بسيطة
+          Transform.translate(
+            offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
+            child: Image.asset(
+              'assets/images/carEloud.png',
+              height: 120,
+              width: 120,
+              fit: BoxFit.contain,
+            ),
+          ),
+
+          // فوق الصورة: أيقونة تشبه الترس/دوائر تدور حول نفسها (لا حاجة لملف جديد)
           AnimatedBuilder(
-            animation: _animation,
+            animation: _rotationAnimation,
             builder: (context, child) {
               return Transform.translate(
-                offset: Offset(_animation.value * 20, math.sin(_controller.value * 2 * math.pi) * 5),
+                // انقل الترس لأسفل قليلاً فوق السيارة
+                offset: const Offset(10, 16),
                 child: Transform.rotate(
-                  angle: _animation.value * 0.1,
-                  child: Image.asset(
-                    'assets/images/carEloud.png',
-                    height: 120,
-                    width: 120,
-                    fit: BoxFit.contain,
+                  // دوران مستمر + ميل ثابت باتجاه اليمين (+0.35 راديان)
+                  angle: _rotationAnimation.value + 0.35,
+                  child: Icon(
+                    Icons.settings_rounded,
+                    size: 48,
+                    color: AppTheme.primaryColor,
                   ),
                 ),
               );
             },
           ),
-          
+
           // شرارة متحركة (تظهر وتختفي)
           Positioned(
             top: 20,
@@ -1458,9 +1488,9 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
     with TickerProviderStateMixin {
   late AnimationController _waterController;
   late AnimationController _scaleController;
-  late AnimationController _rotationController;
+  late AnimationController _horizontalController;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _rotationAnimation;
+  late Animation<double> _horizontalAnimation;
 
   @override
   void initState() {
@@ -1485,17 +1515,20 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       curve: Curves.easeInOut,
     ));
     
-    // Animation للدوران الدائري
-    _rotationController = AnimationController(
-      duration: const Duration(seconds: 3),
+    // لم نعد بحاجة لدوران الصورة حول نفسها — نحافظ على التكبير/تصغير
+
+    // حركة أفقية من اليمين إلى اليسار والعكس (يشبه حركة الكرين/التكسي)
+    // حركة أفقية سريعة وخطية تشبه حركة الكرين
+    _horizontalController = AnimationController(
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     )..repeat();
-    
-    _rotationAnimation = Tween<double>(
-      begin: 0,
-      end: 2 * math.pi, // 360 درجة
+
+    _horizontalAnimation = Tween<double>(
+      begin: -1.0,
+      end: 1.0,
     ).animate(CurvedAnimation(
-      parent: _rotationController,
+      parent: _horizontalController,
       curve: Curves.linear,
     ));
   }
@@ -1504,7 +1537,7 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
   void dispose() {
     _waterController.dispose();
     _scaleController.dispose();
-    _rotationController.dispose();
+    _horizontalController.dispose();
     super.dispose();
   }
 
@@ -1516,21 +1549,27 @@ class _CarWashLoadingWidgetState extends State<_CarWashLoadingWidget>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // صورة غسيل السيارات مع أنيميشن (دوران دائري + تكبير/تصغير)
-          AnimatedBuilder(
-            animation: Listenable.merge([_rotationAnimation, _scaleAnimation]),
-            builder: (context, child) {
-              return Transform.rotate(
-                angle: _rotationAnimation.value,
-                child: Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: Image.asset(
-                    'assets/images/woshingloud.png',
-                    width: 150,
-                    height: 150,
-                    fit: BoxFit.contain,
-                  ),
-                ),
+          // صورة غسيل السيارات مع أنيميشن: تتحرك من اليمين لليسار وتدور وتكبر/تصغر
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final maxDx = (constraints.maxWidth - 150) / 2; // 150 = image width
+              return AnimatedBuilder(
+                animation: Listenable.merge([_scaleAnimation, _horizontalAnimation]),
+                builder: (context, child) {
+                  final dx = _horizontalAnimation.value * maxDx;
+                  return Transform.translate(
+                    offset: Offset(dx, 0),
+                    child: Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: Image.asset(
+                        'assets/images/woshingloud.png',
+                        width: 150,
+                        height: 150,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
