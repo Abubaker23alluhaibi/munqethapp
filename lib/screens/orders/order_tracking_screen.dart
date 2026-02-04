@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
+import 'dart:ui' as ui;
 import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../models/driver.dart';
@@ -31,14 +33,53 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   Timer? _updateTimer;
   final _notificationService = LocalNotificationService();
   final _socketService = SocketService();
+  BitmapDescriptor? _carIcon;
 
   @override
   void initState() {
     super.initState();
+    _loadCarIcon();
     _loadOrderData();
     _setupNotificationListener();
-    // تحديث الطلب كل 5 ثواني
     _startPeriodicUpdate();
+  }
+
+  Future<void> _loadCarIcon() async {
+    try {
+      const iconSize = 100.0;
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(Icons.local_taxi_rounded.codePoint),
+          style: TextStyle(
+            fontSize: iconSize * 0.9,
+            fontFamily: Icons.local_taxi_rounded.fontFamily,
+            color: AppTheme.primaryColor,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          (iconSize - textPainter.width) / 2,
+          (iconSize - textPainter.height) / 2,
+        ),
+      );
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(iconSize.toInt(), iconSize.toInt());
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (byteData != null) {
+        final pngBytes = byteData.buffer.asUint8List();
+        _carIcon = BitmapDescriptor.fromBytes(pngBytes);
+        if (mounted) setState(() {});
+      }
+    } catch (e) {
+      _carIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+    }
   }
 
   @override
@@ -113,17 +154,41 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   void _updateMapCamera() {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final order = orderProvider.currentOrder;
+    if (_mapController == null || order == null) return;
 
-    if (_mapController != null && order != null) {
-      if (order.customerLatitude != null && order.customerLongitude != null) {
-        _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(order.customerLatitude!, order.customerLongitude!),
-            14,
-          ),
-        );
-      }
+    final points = <LatLng>[];
+    if (order.customerLatitude != null && order.customerLongitude != null) {
+      points.add(LatLng(order.customerLatitude!, order.customerLongitude!));
     }
+    if (_driver != null &&
+        _driver!.currentLatitude != null &&
+        _driver!.currentLongitude != null) {
+      points.add(LatLng(_driver!.currentLatitude!, _driver!.currentLongitude!));
+    }
+    if (order.destinationLatitude != null && order.destinationLongitude != null) {
+      points.add(LatLng(order.destinationLatitude!, order.destinationLongitude!));
+    }
+
+    if (points.isEmpty) return;
+    if (points.length == 1) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(points.first, 14),
+      );
+      return;
+    }
+    double minLat = points.first.latitude, maxLat = minLat;
+    double minLng = points.first.longitude, maxLng = minLng;
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 64));
   }
 
   Future<void> _cancelOrder(Order order) async {
@@ -221,7 +286,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       );
     }
 
-    // Driver location marker
+    // Driver location marker (أيقونة تكسي مثل خريطة التكسي)
     if (_driver != null &&
         _driver!.currentLatitude != null &&
         _driver!.currentLongitude != null) {
@@ -232,7 +297,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             _driver!.currentLatitude!,
             _driver!.currentLongitude!,
           ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          icon: _carIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           infoWindow: InfoWindow(
             title: 'السائق: ${_driver!.name}',
             snippet: _driver!.phone,
@@ -380,8 +445,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           polylines: _buildPolylines(),
                           myLocationButtonEnabled: false,
                           myLocationEnabled: true,
-                          zoomControlsEnabled: false,
+                          zoomControlsEnabled: true,
                           mapType: MapType.normal,
+                          compassEnabled: true,
+                          buildingsEnabled: true,
+                          trafficEnabled: false,
+                          mapToolbarEnabled: false,
+                          rotateGesturesEnabled: true,
+                          scrollGesturesEnabled: true,
+                          tiltGesturesEnabled: true,
+                          zoomGesturesEnabled: true,
                         ),
                       ),
                       // Order Info

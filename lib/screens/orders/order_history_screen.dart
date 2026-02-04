@@ -227,8 +227,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       ),
       child: InkWell(
         onTap: () {
-          // Navigate to order details
-          // context.push('/order-details/${order.id}');
+          context.push('/orders/tracking/${order.id}');
         },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
@@ -316,6 +315,25 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ),
                 ],
               ),
+              if ((order.driverName != null && order.driverName!.isNotEmpty) || order.driverId != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.local_taxi_rounded, size: 16, color: AppTheme.primaryColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        order.driverName ?? 'سائق معين',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (order.items != null && order.items!.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(

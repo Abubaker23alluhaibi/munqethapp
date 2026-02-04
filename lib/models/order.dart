@@ -72,6 +72,8 @@ class Order {
   final String? notes;
   final String? driverId; // unified field (was deliveryId/taxiId)
   final DateTime? driverAcceptedAt; // unified field (was deliveryAcceptedAt/taxiAcceptedAt)
+  final String? driverName; // من الـ API عند وجود سائق
+  final String? driverPhone;
   // Taxi/Crane-specific fields
   final double? destinationLatitude;
   final double? destinationLongitude;
@@ -111,6 +113,8 @@ class Order {
     this.notes,
     this.driverId,
     this.driverAcceptedAt,
+    this.driverName,
+    this.driverPhone,
     this.destinationLatitude,
     this.destinationLongitude,
     this.destinationAddress,
@@ -145,6 +149,8 @@ class Order {
       'notes': notes,
       'driverId': driverId,
       'driverAcceptedAt': driverAcceptedAt?.toIso8601String(),
+      'driverName': driverName,
+      'driverPhone': driverPhone,
       'destinationLatitude': destinationLatitude,
       'destinationLongitude': destinationLongitude,
       'destinationAddress': destinationAddress,
@@ -206,9 +212,11 @@ class Order {
               : DateTime.parse((json['updatedAt'] as DateTime).toIso8601String()))
           : null,
       notes: json['notes'] as String?,
-      driverId: json['driverId'] as String? ?? 
-          json['deliveryId'] as String? ?? 
+      driverId: json['driverId'] as String? ??
+          json['deliveryId'] as String? ??
           json['taxiId'] as String?,
+      driverName: json['driverName'] as String?,
+      driverPhone: json['driverPhone'] as String?,
       driverAcceptedAt: json['driverAcceptedAt'] != null
           ? (json['driverAcceptedAt'] is String
               ? DateTime.parse(json['driverAcceptedAt'] as String)
@@ -264,6 +272,8 @@ class Order {
     String? notes,
     String? driverId,
     DateTime? driverAcceptedAt,
+    String? driverName,
+    String? driverPhone,
     double? destinationLatitude,
     double? destinationLongitude,
     String? destinationAddress,
@@ -296,6 +306,8 @@ class Order {
       notes: notes ?? this.notes,
       driverId: driverId ?? this.driverId,
       driverAcceptedAt: driverAcceptedAt ?? this.driverAcceptedAt,
+      driverName: driverName ?? this.driverName,
+      driverPhone: driverPhone ?? this.driverPhone,
       destinationLatitude: destinationLatitude ?? this.destinationLatitude,
       destinationLongitude: destinationLongitude ?? this.destinationLongitude,
       destinationAddress: destinationAddress ?? this.destinationAddress,
