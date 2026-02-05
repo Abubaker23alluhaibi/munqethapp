@@ -740,78 +740,114 @@ class AdminService {
     };
   }
 
-  // حساب إحصائيات العمولات (10%) للفترات المختلفة
+  // جلب إعدادات النظام (نسبة العمولة وغيرها)
+  Future<Map<String, dynamic>> getSettings() async {
+    try {
+      final response = await _apiService.get('/settings');
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        return {
+          'commissionPercentage': (data['commissionPercentage'] as num?)?.toDouble() ?? 10.0,
+          'updatedAt': data['updatedAt'],
+        };
+      }
+    } catch (e) {
+      AppLogger.e('Error getting settings: $e');
+    }
+    return {'commissionPercentage': 10.0};
+  }
+
+  // تحديث إعدادات النظام
+  Future<bool> updateSettings({required double commissionPercentage}) async {
+    try {
+      final response = await _apiService.put('/settings', data: {
+        'commissionPercentage': commissionPercentage,
+      });
+      return response.statusCode == 200;
+    } catch (e) {
+      AppLogger.e('Error updating settings: $e');
+      rethrow;
+    }
+  }
+
+  // حساب إحصائيات العمولات حسب النسبة المُعدّة في الإعدادات
   Future<Map<String, double>> getCommissionStatistics() async {
     try {
+      final settings = await getSettings();
+      final percentage = (settings['commissionPercentage'] as num?)?.toDouble() ?? 10.0;
+      final rate = percentage / 100.0;
+
       final orderService = OrderService();
-      final drivers = await getAllDrivers();
-      
-      // جلب جميع الطلبات المكتملة
       final allOrders = await orderService.getAllOrdersForDriver();
-      final completedOrders = allOrders.where((order) => 
-        order.status == OrderStatus.completed || order.status == OrderStatus.delivered
-      ).toList();
-      
+      final completedOrders = allOrders.where((order) =>
+          order.status == OrderStatus.completed || order.status == OrderStatus.delivered).toList();
+
       final now = DateTime.now();
-      
-      // اليومي: من بداية اليوم
       final todayStart = DateTime(now.year, now.month, now.day);
-      final todayOrders = completedOrders.where((order) => 
-        order.createdAt.isAfter(todayStart)
-      ).toList();
-      
-      // الأسبوعي: من بداية الأسبوع (اليوم الأول من الأسبوع)
-      // weekday: 1 = Monday, 7 = Sunday
-      final daysToSubtract = now.weekday - 1; // عدد الأيام للرجوع إلى بداية الأسبوع
+      final todayOrders = completedOrders.where((order) => order.createdAt.isAfter(todayStart)).toList();
+
+      final daysToSubtract = now.weekday - 1;
       final weekStartDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysToSubtract));
-      final weeklyOrders = completedOrders.where((order) => 
-        order.createdAt.isAfter(weekStartDate.subtract(const Duration(seconds: 1)))
-      ).toList();
-      
-      // الشهري: من بداية الشهر
+      final weeklyOrders = completedOrders.where((order) =>
+          order.createdAt.isAfter(weekStartDate.subtract(const Duration(seconds: 1)))).toList();
+
       final monthStart = DateTime(now.year, now.month, 1);
-      final monthlyOrders = completedOrders.where((order) => 
-        order.createdAt.isAfter(monthStart.subtract(const Duration(days: 1)))
-      ).toList();
-      
-      // حساب المبلغ الكامل و 10% لكل فترة
+      final monthlyOrders = completedOrders.where((order) =>
+          order.createdAt.isAfter(monthStart.subtract(const Duration(days: 1)))).toList();
+
       double calculateCommission(List<Order> orders) {
         double totalFullAmount = 0.0;
-        
         for (var order in orders) {
           if (order.type == 'delivery') {
-            // للديلفري: المبلغ الكامل = مبلغ التوصيل + مبلغ الطلبية
             final deliveryFee = (order.deliveryFee ?? 0).toDouble();
             final orderTotal = order.total ?? 0.0;
             final orderAmount = orderTotal - deliveryFee;
             totalFullAmount += deliveryFee + orderAmount;
           } else {
-            // للخدمات الأخرى: المبلغ الكامل = إجمالي المبلغ
-            final orderTotal = order.total ?? order.fare ?? 0.0;
-            totalFullAmount += orderTotal;
+            totalFullAmount += order.total ?? order.fare ?? 0.0;
           }
         }
-        
-        // حساب 10% من المبلغ الكامل
-        return totalFullAmount * 0.10;
+        return totalFullAmount * rate;
       }
-      
-      final dailyCommission = calculateCommission(todayOrders);
-      final weeklyCommission = calculateCommission(weeklyOrders);
-      final monthlyCommission = calculateCommission(monthlyOrders);
-      
+
       return {
-        'daily': dailyCommission,
-        'weekly': weeklyCommission,
-        'monthly': monthlyCommission,
+        'daily': calculateCommission(todayOrders),
+        'weekly': calculateCommission(weeklyOrders),
+        'monthly': calculateCommission(monthlyOrders),
+        'percentage': percentage,
       };
     } catch (e) {
       AppLogger.e('Error calculating commission statistics: $e');
-      return {
-        'daily': 0.0,
-        'weekly': 0.0,
-        'monthly': 0.0,
-      };
+      return {'daily': 0.0, 'weekly': 0.0, 'monthly': 0.0, 'percentage': 10.0};
+    }
+  }
+
+  // إضافة أدمن جديد (للأدمن الرئيسي فقط)
+  Future<Map<String, dynamic>> addAdmin({
+    required String code,
+    required String name,
+    required String password,
+    String? email,
+    String? phone,
+    required Map<String, bool> permissions,
+  }) async {
+    try {
+      final response = await _apiService.post('/admins', data: {
+        'code': code,
+        'name': name,
+        'password': password,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        'permissions': permissions,
+      });
+      if (response.statusCode == 201) {
+        return {'success': true};
+      }
+      final err = response.data is Map ? (response.data as Map)['error'] : null;
+      return {'success': false, 'error': err?.toString() ?? 'فشل إنشاء الأدمن'};
+    } catch (e) {
+      AppLogger.e('Error adding admin: $e');
+      return {'success': false, 'error': e.toString()};
     }
   }
 

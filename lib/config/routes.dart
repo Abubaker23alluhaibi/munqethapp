@@ -29,6 +29,8 @@ import '../screens/admin/add_edit_advertisement_screen.dart';
 import '../screens/admin/cards_screen.dart';
 import '../screens/admin/manage_supermarket_locations_screen.dart';
 import '../screens/admin/change_password_screen.dart';
+import '../screens/admin/admin_settings_screen.dart';
+import '../screens/admin/add_admin_screen.dart';
 import '../screens/driver/change_password_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/addresses_screen.dart';
@@ -292,6 +294,16 @@ class AppRouter {
         path: '/admin/change-password',
         name: 'admin_change_password',
         builder: (context, state) => const AdminChangePasswordScreen(),
+      ),
+      GoRoute(
+        path: '/admin/settings',
+        name: 'admin_settings',
+        builder: (context, state) => const AdminSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/add-admin',
+        name: 'admin_add_admin',
+        builder: (context, state) => const AddAdminScreen(),
       ),
       GoRoute(
         path: '/admin/manage-supermarket-locations',

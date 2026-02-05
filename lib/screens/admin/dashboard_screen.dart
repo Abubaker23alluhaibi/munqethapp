@@ -18,6 +18,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Map<String, int> _statistics = {};
   Map<String, double> _commissionStatistics = {};
   bool _isLoading = true;
+  dynamic _currentAdmin;
 
   @override
   void initState() {
@@ -31,6 +32,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     });
 
     try {
+      _currentAdmin = await _adminService.getCurrentAdmin();
       final stats = await _adminService.getStatistics();
       final commissionStats = await _adminService.getCommissionStatistics();
       if (mounted) {
@@ -148,7 +150,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     .slideY(begin: 0.2, end: 0),
                 const SizedBox(height: 24),
                 Text(
-                  'إحصائيات العمولات (10%)',
+                  'إحصائيات العمولات (${(_commissionStatistics['percentage'] ?? 10.0).toStringAsFixed(0)}%)',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -506,9 +508,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildQuickActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    final admin = _currentAdmin;
+    final canDashboard = admin == null || admin.permissions.canAccessDashboard;
+    final canCreateAccount = admin == null || admin.permissions.canCreateAccount;
+    final canUsers = admin == null || admin.permissions.canManageUsers;
+    final canAds = admin == null || admin.permissions.canManageAdvertisements;
+    final canCards = admin == null || admin.permissions.canManageCards;
+    final canSettings = admin == null || admin.permissions.canAccessSettings;
+    final canChangePassword = admin == null || admin.permissions.canChangePassword;
+    final canAddAdmins = admin != null && (admin.isSuperAdmin == true || admin.permissions.canAddAdmins);
+
+    final actions = <Widget>[];
+    if (canCreateAccount) {
+      actions.addAll([
         _buildActionCard(
           'تسوق المنقذ',
           'إدارة المنتجات في سوبر ماركت المنقذ (سيتم إنشاؤه تلقائياً إذا لم يكن موجوداً)',
@@ -525,6 +537,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           () => context.push('/admin/create-account'),
         ),
         const SizedBox(height: 12),
+      ]);
+    }
+    if (canUsers) {
+      actions.addAll([
         _buildActionCard(
           'إدارة المستخدمين',
           'عرض وتعديل وحذف وتعليق جميع المستخدمين',
@@ -533,6 +549,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           () => context.push('/admin/users-management'),
         ),
         const SizedBox(height: 12),
+      ]);
+    }
+    if (canAds) {
+      actions.addAll([
         _buildActionCard(
           'إدارة الإعلانات والتنزيلات',
           'إضافة وتعديل وحذف الإعلانات والتنزيلات',
@@ -541,6 +561,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           () => context.push('/admin/advertisements'),
         ),
         const SizedBox(height: 12),
+      ]);
+    }
+    if (canCards) {
+      actions.addAll([
         _buildActionCardWithExtraPadding(
           'البطاقات المالية',
           'إنشاء وإدارة البطاقات المالية (5000، 10000، 25000)',
@@ -549,6 +573,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           () => context.push('/admin/cards'),
         ),
         const SizedBox(height: 12),
+      ]);
+    }
+    if (canSettings) {
+      actions.addAll([
+        _buildActionCard(
+          'الإعدادات',
+          'تعديل نسبة الأرباح (العمولة) المعروضة في لوحة التحكم',
+          Icons.settings_rounded,
+          Colors.teal.shade600,
+          () => context.push('/admin/settings'),
+        ),
+        const SizedBox(height: 12),
+      ]);
+    }
+    if (canAddAdmins) {
+      actions.addAll([
+        _buildActionCard(
+          'إضافة أدمن',
+          'إضافة أدمن ثانوي وتحديد صلاحيات الدخول للصفحات',
+          Icons.person_add_rounded,
+          Colors.indigo.shade600,
+          () => context.push('/admin/add-admin'),
+        ),
+        const SizedBox(height: 12),
+      ]);
+    }
+    if (canChangePassword) {
+      actions.addAll([
         _buildActionCard(
           'تغيير كلمة المرور',
           'تغيير كلمة المرور الخاصة بك',
@@ -556,7 +608,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Colors.orange.shade600,
           () => context.push('/admin/change-password'),
         ),
-      ],
+      ]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: actions,
     );
   }
 
