@@ -62,8 +62,15 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       case 'cancelled':
         return orders.where((o) => o.status == OrderStatus.cancelled).toList();
       default:
-        return orders;
+        return orders; // نرجع نسخة من القائمة للكل
     }
+  }
+
+  // دالة مساعدة لتحديد ما إذا كان الطلب نشطاً (يحتاج تتبع)
+  bool _isActiveOrder(OrderStatus status) {
+    return status != OrderStatus.completed && 
+           status != OrderStatus.cancelled && 
+           status != OrderStatus.delivered;
   }
 
   Color _getStatusColor(OrderStatus status) {
@@ -153,7 +160,23 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     return const ShimmerList(itemCount: 5, itemHeight: 120);
                   }
 
-                  final filteredOrders = _getFilteredOrders(orderProvider.orders);
+                  // 1. الحصول على القائمة المصفاة
+                  // ملاحظة: نقوم بعمل toList() لإنشاء نسخة قابلة للتعديل والترتيب
+                  var filteredOrders = _getFilteredOrders(orderProvider.orders).toList();
+
+                  // 2. ترتيب القائمة: الطلبات النشطة أولاً، ثم حسب التاريخ (الأحدث أولاً)
+                  filteredOrders.sort((a, b) {
+                    final aActive = _isActiveOrder(a.status);
+                    final bActive = _isActiveOrder(b.status);
+
+                    // إذا كان أ نشطاً وب غير نشط، أ يأتي أولاً
+                    if (aActive && !bActive) return -1;
+                    // إذا كان ب نشطاً وأ غير نشط، ب يأتي أولاً
+                    if (!aActive && bActive) return 1;
+                    
+                    // إذا تساووا في الحالة (كلاهما نشط أو كلاهما غير نشط)، نرتب بالأحدث
+                    return b.createdAt.compareTo(a.createdAt);
+                  });
 
                   if (filteredOrders.isEmpty) {
                     return RefreshIndicator(
@@ -218,6 +241,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final statusColor = _getStatusColor(order.status);
     final statusText = _getStatusText(order.status);
     final orderType = _getOrderTypeText(order.type);
+    final isActive = _isActiveOrder(order.status); // التحقق هل الطلب نشط
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -381,11 +405,38 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ),
                 ],
               ),
-              // Cancel Button (only for cancellable orders)
+              
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+
+              // === [NEW] Track Order Button (Only for Active Orders) ===
+              if (isActive) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      context.push('/orders/tracking/${order.id}');
+                    },
+                    icon: const Icon(Icons.location_on_outlined, size: 20),
+                    label: const Text('تتبع الطلب'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                // Add spacing if cancel button will also appear
+                if (_canCancelOrder(order)) const SizedBox(height: 8),
+              ],
+
+              // Cancel Button (Existing Logic)
               if (_canCancelOrder(order)) ...[
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -396,6 +447,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       foregroundColor: AppTheme.errorColor,
                       side: BorderSide(color: AppTheme.errorColor),
                       padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -488,8 +542,3 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     }
   }
 }
-
-
-
-
-
