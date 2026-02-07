@@ -590,11 +590,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (canAddAdmins) {
       actions.addAll([
         _buildActionCard(
-          'إضافة أدمن',
-          'إضافة أدمن ثانوي وتحديد صلاحيات الدخول للصفحات',
-          Icons.person_add_rounded,
+          'إدارة الأدمنية',
+          'عرض وتعديل صلاحيات وحذف الأدمنية المضافين',
+          Icons.manage_accounts_rounded,
           Colors.indigo.shade600,
-          () => context.push('/admin/add-admin'),
+          () => context.push('/admin/admins-management'),
         ),
         const SizedBox(height: 12),
       ]);

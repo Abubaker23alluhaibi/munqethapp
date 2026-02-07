@@ -851,6 +851,47 @@ class AdminService {
     }
   }
 
+  // جلب قائمة جميع الأدمنية
+  Future<List<Admin>> getAllAdmins() async {
+    try {
+      final response = await _apiService.get('/admins');
+      if (response.statusCode == 200 && response.data != null) {
+        final list = response.data as List<dynamic>;
+        return list.map((e) => Admin.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      AppLogger.e('Error getting admins list: $e');
+    }
+    return [];
+  }
+
+  // تحديث أدمن (الاسم، البريد، الهاتف، الصلاحيات)
+  Future<bool> updateAdmin(String adminId, {String? name, String? email, String? phone, Map<String, bool>? permissions}) async {
+    try {
+      final data = <String, dynamic>{};
+      if (name != null) data['name'] = name;
+      if (email != null) data['email'] = email;
+      if (phone != null) data['phone'] = phone;
+      if (permissions != null) data['permissions'] = permissions;
+      final response = await _apiService.put('/admins/$adminId', data: data);
+      return response.statusCode == 200;
+    } catch (e) {
+      AppLogger.e('Error updating admin: $e');
+      rethrow;
+    }
+  }
+
+  // حذف أدمن
+  Future<bool> deleteAdmin(String adminId) async {
+    try {
+      final response = await _apiService.delete('/admins/$adminId');
+      return response.statusCode == 200;
+    } catch (e) {
+      AppLogger.e('Error deleting admin: $e');
+      rethrow;
+    }
+  }
+
   // تغيير كلمة المرور للإدمن
   Future<bool> changePassword(String adminId, String currentPassword, String newPassword) async {
     try {

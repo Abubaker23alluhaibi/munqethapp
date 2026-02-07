@@ -31,6 +31,8 @@ import '../screens/admin/manage_supermarket_locations_screen.dart';
 import '../screens/admin/change_password_screen.dart';
 import '../screens/admin/admin_settings_screen.dart';
 import '../screens/admin/add_admin_screen.dart';
+import '../screens/admin/admins_management_screen.dart';
+import '../screens/admin/edit_admin_screen.dart';
 import '../screens/driver/change_password_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/addresses_screen.dart';
@@ -42,6 +44,7 @@ import '../screens/orders/order_history_screen.dart';
 import '../screens/orders/order_tracking_screen.dart';
 import '../models/product.dart';
 import '../models/driver.dart';
+import '../models/admin.dart';
 import '../models/supermarket.dart';
 
 class AppRouter {
@@ -304,6 +307,19 @@ class AppRouter {
         path: '/admin/add-admin',
         name: 'admin_add_admin',
         builder: (context, state) => const AddAdminScreen(),
+      ),
+      GoRoute(
+        path: '/admin/admins-management',
+        name: 'admin_admins_management',
+        builder: (context, state) => const AdminsManagementScreen(),
+      ),
+      GoRoute(
+        path: '/admin/edit-admin',
+        name: 'admin_edit_admin',
+        builder: (context, state) {
+          final admin = state.extra as Admin;
+          return EditAdminScreen(admin: admin);
+        },
       ),
       GoRoute(
         path: '/admin/manage-supermarket-locations',
