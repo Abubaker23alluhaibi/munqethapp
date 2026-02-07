@@ -144,6 +144,32 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     }
   }
 
+  /// تبديل حالة النشاط (متاح / متوقف عن استلام الطلبات)
+  Future<void> _toggleAvailability() async {
+    if (_driver == null) return;
+    final newValue = !_driver!.isAvailable;
+    setState(() => _driver = _driver!.copyWith(isAvailable: newValue));
+    final ok = await _driverService.updateDriver(_driver!);
+    if (mounted) {
+      if (!ok) {
+        setState(() => _driver = _driver!.copyWith(isAvailable: !newValue));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('فشل تحديث الحالة، حاول مرة أخرى'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newValue ? 'أنت الآن نشط وتستلم الطلبات' : 'توقفت عن استلام الطلبات'),
+            backgroundColor: newValue ? AppTheme.successColor : Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -438,27 +464,70 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: _driver!.isAvailable
-                      ? AppTheme.successColor
-                      : AppTheme.errorColor,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _driver!.isAvailable ? 'متاح' : 'غير متاح',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // زر التحكم بالنشاط: نشط = أستلم طلبات، غير نشط = متوقف
+          Material(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: _toggleAvailability,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      _driver!.isAvailable ? Icons.check_circle_rounded : Icons.pause_circle_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _driver!.isAvailable ? 'نشط - أستلم الطلبات' : 'متوقف - لا أستلم طلبات',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            _driver!.isAvailable ? 'اضغط لإيقاف استلام الطلبات' : 'اضغط لتفعيل استلام الطلبات',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _driver!.isAvailable
+                            ? AppTheme.successColor
+                            : Colors.orange.shade700,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _driver!.isAvailable ? 'متاح' : 'غير متاح',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),
