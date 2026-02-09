@@ -87,6 +87,7 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
 
   bool _isLoading = false;
   AppSettings? _appSettings;
+  bool _serviceUnavailable = false; // الخدمة غير متوفرة في منطقته (خارج المسافة)
 
   @override
   void initState() {
@@ -108,6 +109,32 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
       case 'car_wash': return _appSettings!.carWash.maxDistanceKm;
       case 'maid': return _appSettings!.maid.maxDistanceKm;
       default: return _appSettings!.carEmergency.maxDistanceKm;
+    }
+  }
+
+  /// التحقق من توفر الخدمة ضمن المسافة المسموحة بعد اختيار الموقع
+  Future<void> _checkServiceAvailability() async {
+    if (_customerLat == null || _customerLng == null) return;
+    if (widget.serviceType == 'maid') return; // العاملة لا نتحقق من المسافة مسبقاً بنفس الطريقة
+    try {
+      final driver = await _driverService.findNearestDriver(
+        _customerLat!,
+        _customerLng!,
+        widget.serviceType,
+      );
+      final maxKm = _getMaxDistanceKm();
+      if (driver == null) {
+        if (mounted) setState(() => _serviceUnavailable = true);
+        return;
+      }
+      final distance = driver.distanceTo(_customerLat!, _customerLng!);
+      if (mounted) {
+        setState(() {
+          _serviceUnavailable = distance == null || distance > maxKm;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _serviceUnavailable = true);
     }
   }
 
@@ -620,6 +647,47 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
     }
   }
 
+  Widget _buildServiceUnavailable() {
+    final maxKm = _getMaxDistanceKm();
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.location_off_rounded, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 24),
+            Text(
+              'غير متوفر',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[700],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${_getServiceName()} غير متوفرة في منطقتك حالياً.\nأقصى مسافة: ${maxKm.toStringAsFixed(0)} كم',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            OutlinedButton.icon(
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('رجوع'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primaryColor,
+                side: BorderSide(color: AppTheme.primaryColor),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -634,7 +702,9 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
           backgroundColor: AppTheme.primaryColor,
           foregroundColor: Colors.white,
         ),
-        body: SingleChildScrollView(
+        body: _serviceUnavailable
+            ? _buildServiceUnavailable()
+            : SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
@@ -1053,11 +1123,12 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                     label: 'حدد موقعك على الخريطة *',
                     initialLatitude: _customerLat,
                     initialLongitude: _customerLng,
-                    onLocationSelected: (lat, lng) {
+                    onLocationSelected: (lat, lng) async {
                       setState(() {
                         _customerLat = lat;
                         _customerLng = lng;
                       });
+                      await _checkServiceAvailability();
                       // حساب السعر عند تغيير الموقع (للبنزين)
                       if (widget.serviceType == 'fuel') {
                         _calculateFuelPrice();

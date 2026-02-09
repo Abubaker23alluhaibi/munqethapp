@@ -22,6 +22,7 @@ import '../../utils/delivery_fee_calculator.dart';
 import '../../core/utils/distance_calculator.dart';
 import '../../services/settings_service.dart';
 import '../../models/app_settings.dart';
+import 'package:geolocator/geolocator.dart';
 
 class ShoppingOrderScreen extends StatefulWidget {
   const ShoppingOrderScreen({super.key});
@@ -57,6 +58,7 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
   int? _deliveryFee;
   double? _distanceToSupermarket;
   AppSettings? _appSettings;
+  bool _serviceUnavailable = false; // الخدمة غير متوفرة في منطقته (خارج المسافة المسموحة)
 
   @override
   void initState() {
@@ -64,6 +66,31 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
     _loadUserInfo();
     _loadProducts();
     _loadAppSettings();
+    _tryCheckAvailabilityOnLoad();
+  }
+
+  /// التحقق من التوفر فور فتح الصفحة إن أمكن (باستخدام الموقع الحالي)
+  Future<void> _tryCheckAvailabilityOnLoad() async {
+    try {
+      await _loadAppSettings();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        final requested = await Geolocator.requestPermission();
+        if (requested != LocationPermission.whileInUse && requested != LocationPermission.always) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+      if (!mounted) return;
+      setState(() {
+        _customerLat = position.latitude;
+        _customerLng = position.longitude;
+      });
+      await _calculateDeliveryFee();
+    } catch (_) {
+      // تجاهل: المستخدم سيحدد الموقع يدوياً
+    }
   }
 
   Future<void> _loadAppSettings() async {
@@ -172,6 +199,8 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
 
         if (mounted) {
           final market = _appSettings?.market;
+          final maxKm = market?.maxDistanceKm ?? 5.0;
+          final outOfRange = distance == null || distance > maxKm;
           setState(() {
             _distanceToSupermarket = distance;
             _deliveryFee = distance != null
@@ -179,23 +208,20 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
                     ? DeliveryFeeCalculator.calculateDeliveryFeeWithTiers(distance, market.deliveryFeeTiers, market.deliveryFeePerKmOverMax)
                     : DeliveryFeeCalculator.calculateDeliveryFee(distance))
                 : 1000;
-            // التأكد من أن deliveryFee على الأقل 1000
-            if (_deliveryFee != null && _deliveryFee! < 1000) {
-              _deliveryFee = 1000;
-            }
+            if (_deliveryFee != null && _deliveryFee! < 1000) _deliveryFee = 1000;
+            _serviceUnavailable = outOfRange;
           });
         }
       } else {
-        // إذا لم يوجد سوبر ماركت، استخدم قيمة افتراضية
         if (mounted) {
           setState(() {
             _deliveryFee = 1000;
             _distanceToSupermarket = null;
+            _serviceUnavailable = true; // لا يوجد سوبر ماركت
           });
         }
       }
     } catch (e) {
-      // في حالة الخطأ، استخدم قيمة افتراضية
       if (mounted) {
         setState(() {
           _deliveryFee = 1000;
@@ -567,6 +593,48 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
     }
   }
 
+  Widget _buildServiceUnavailable() {
+    final maxKm = _appSettings?.market.maxDistanceKm ?? 5.0;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.location_off_rounded, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 24),
+            Text(
+              'غير متوفر',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[700],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'خدمة التسوق غير متوفرة في منطقتك حالياً.\nأقصى مسافة للتوصيل: ${maxKm.toStringAsFixed(0)} كم',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            OutlinedButton.icon(
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('رجوع'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primaryColor,
+                side: BorderSide(color: AppTheme.primaryColor),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -579,7 +647,9 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
         ),
         body: _isLoadingProducts
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
+            : _serviceUnavailable
+                ? _buildServiceUnavailable()
+                : SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: Form(
                   key: _formKey,
