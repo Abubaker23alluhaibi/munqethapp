@@ -13,6 +13,8 @@ import '../../services/driver_service.dart';
 import '../../services/storage_service.dart';
 import '../../core/utils/distance_calculator.dart';
 import '../../utils/taxi_fare_calculator.dart';
+import '../../services/settings_service.dart';
+import '../../models/app_settings.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
@@ -48,6 +50,7 @@ class _TaxiScreenState extends State<TaxiScreen> {
   
   // Available taxi drivers
   List<Driver> _availableTaxiDrivers = [];
+  AppSettings? _appSettings;
   Timer? _driverLocationTimer;
   
   // Car icon for taxi markers
@@ -59,12 +62,18 @@ class _TaxiScreenState extends State<TaxiScreen> {
     _loadCarIcon(); // تحميل أيقونة السيارة
     _getCurrentLocation();
     _loadAvailableTaxiDrivers();
+    _loadAppSettings();
     // Update driver locations every 10 seconds for real-time tracking
     _driverLocationTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) {
         _loadAvailableTaxiDrivers();
       }
     });
+  }
+
+  Future<void> _loadAppSettings() async {
+    final settings = await SettingsService().getAppSettings();
+    if (mounted) setState(() => _appSettings = settings);
   }
   
   @override
@@ -734,15 +743,23 @@ class _TaxiScreenState extends State<TaxiScreen> {
       return 0;
     }
     
-    // تحديد وقت الذروة والليل
-    final isPeak = TaxiFareCalculator.isPeakTime();
-    final isNight = TaxiFareCalculator.isNightTime();
+    final taxi = _appSettings?.taxi;
+    final isPeak = taxi != null
+        ? TaxiFareCalculator.isPeakTimeFrom(taxi.peakMorningStart, taxi.peakMorningEnd, taxi.peakEveningStart, taxi.peakEveningEnd)
+        : TaxiFareCalculator.isPeakTime();
+    final isNight = taxi != null
+        ? TaxiFareCalculator.isNightTimeFrom(taxi.nightStart, taxi.nightEnd)
+        : TaxiFareCalculator.isNightTime();
     
     return TaxiFareCalculator.calculateFare(
       distance,
       isPeakTime: isPeak,
       isNight: isNight,
-      hasTraffic: false, // يمكن إضافة منطق للزحام لاحقاً
+      hasTraffic: false,
+      nightMinFare: taxi?.nightMinFare,
+      nightMaxFare: taxi?.nightMaxFare,
+      peakMinFare: taxi?.peakMinFare,
+      peakMaxFare: taxi?.peakMaxFare,
     );
   }
 
@@ -864,18 +881,18 @@ class _TaxiScreenState extends State<TaxiScreen> {
         return;
       }
       
-      // Check if nearest driver is within 3 km
+      final maxTaxiKm = _appSettings?.taxi.maxDistanceKm ?? 3.0;
       final nearestDistance = distances.isNotEmpty ? distances[0] : null;
-      if (nearestDistance == null || nearestDistance > 3.0) {
+      if (nearestDistance == null || nearestDistance > maxTaxiKm) {
         if (mounted) {
           setState(() {
             _isSubmitting = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('لا يوجد تكسي متاح ضمن مسافة 3 كيلومتر. الرجاء المحاولة لاحقاً'),
+            SnackBar(
+              content: Text('لا يوجد تكسي متاح ضمن مسافة ${maxTaxiKm.toStringAsFixed(0)} كيلومتر. الرجاء المحاولة لاحقاً'),
               backgroundColor: AppTheme.errorColor,
-              duration: Duration(seconds: 4),
+              duration: const Duration(seconds: 4),
             ),
           );
         }

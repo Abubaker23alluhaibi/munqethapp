@@ -740,16 +740,12 @@ class AdminService {
     };
   }
 
-  // جلب إعدادات النظام (نسبة العمولة وغيرها)
+  // جلب إعدادات النظام (كاملة: عمولة، مسافات، أسعار، أوقات)
   Future<Map<String, dynamic>> getSettings() async {
     try {
       final response = await _apiService.get('/settings');
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-        return {
-          'commissionPercentage': (data['commissionPercentage'] as num?)?.toDouble() ?? 10.0,
-          'updatedAt': data['updatedAt'],
-        };
+        return response.data as Map<String, dynamic>;
       }
     } catch (e) {
       AppLogger.e('Error getting settings: $e');
@@ -757,13 +753,27 @@ class AdminService {
     return {'commissionPercentage': 10.0};
   }
 
-  // تحديث إعدادات النظام
+  // تحديث إعدادات النظام (نسبة العمولة فقط - للتوافق مع الكود القديم)
   Future<bool> updateSettings({required double commissionPercentage}) async {
     try {
       final response = await _apiService.put('/settings', data: {
         'commissionPercentage': commissionPercentage,
       });
       return response.statusCode == 200;
+    } catch (e) {
+      AppLogger.e('Error updating settings: $e');
+      rethrow;
+    }
+  }
+
+  // تحديث إعدادات النظام كاملة (مسافات، أسعار، أوقات، تفعيل/تعطيل)
+  Future<bool> updateSettingsFull(Map<String, dynamic> body) async {
+    try {
+      final response = await _apiService.put('/settings', data: body);
+      if (response.statusCode == 200) {
+        return true;
+      }
+      return false;
     } catch (e) {
       AppLogger.e('Error updating settings: $e');
       rethrow;

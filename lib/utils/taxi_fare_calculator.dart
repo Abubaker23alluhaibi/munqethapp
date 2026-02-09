@@ -9,12 +9,17 @@ class TaxiFareCalculator {
   /// [isNight]: هل هو وقت الليل (افتراضي: false)
   /// [hasTraffic]: هل هناك زحام أو سؤال (افتراضي: false)
   /// [trafficMultiplier]: نسبة زيادة الزحام (10% إلى 25%) - افتراضي: 0.15 (15%)
+  /// [nightMinFare], [nightMaxFare], [peakMinFare], [peakMaxFare]: من إعدادات الأدمن إن وُجدت
   static int calculateFare(
     double distanceKm, {
     bool isPeakTime = false,
     bool isNight = false,
     bool hasTraffic = false,
     double trafficMultiplier = 0.15, // 15% افتراضي
+    int? nightMinFare,
+    int? nightMaxFare,
+    int? peakMinFare,
+    int? peakMaxFare,
   }) {
     // التحقق من أن المسافة صحيحة
     if (distanceKm <= 0 || !distanceKm.isFinite) {
@@ -62,31 +67,18 @@ class TaxiFareCalculator {
       baseFare = ((baseFare / 250).round() * 250);
     }
 
-    // تطبيق وقت الليل: سعر بين 10000 و 20000 بعد الساعة 8:30 مساءً
-    // وقت الليل له أولوية على وقت الذروة
+    final int nightMin = nightMinFare ?? 10000;
+    final int nightMax = nightMaxFare ?? 20000;
+    final int peakMin = peakMinFare ?? 10000;
+    final int peakMax = peakMaxFare ?? 20000;
+    // تطبيق وقت الليل: سعر بين nightMin و nightMax (من الإعدادات أو الافتراضي)
     if (isNight) {
-      // بعد الساعة 8:30 مساءً: السعر بين 10000 و 20000
-      // إذا كان السعر الأساسي أقل من 10000، نجعله 10000
-      if (baseFare < 10000) {
-        baseFare = 10000;
-      }
-      // إذا كان السعر الأساسي أكثر من 20000، نحدده بـ 20000
-      if (baseFare > 20000) {
-        baseFare = 20000;
-      }
-      // تقريب لأقرب 250
+      if (baseFare < nightMin) baseFare = nightMin;
+      if (baseFare > nightMax) baseFare = nightMax;
       baseFare = ((baseFare / 250).round() * 250);
     } else if (isPeakTime) {
-      // تطبيق وقت الذروة: 10000 إلى 20000 (فقط إذا لم يكن وقت ليل)
-      // إذا كان السعر الأساسي أقل من 10000، نجعله 10000
-      if (baseFare < 10000) {
-        baseFare = 10000;
-      }
-      // إذا كان السعر الأساسي أكثر من 20000، نحدده بـ 20000
-      if (baseFare > 20000) {
-        baseFare = 20000;
-      }
-      // تقريب لأقرب 250
+      if (baseFare < peakMin) baseFare = peakMin;
+      if (baseFare > peakMax) baseFare = peakMax;
       baseFare = ((baseFare / 250).round() * 250);
     }
 
@@ -113,6 +105,10 @@ class TaxiFareCalculator {
     bool isNight = false,
     bool hasTraffic = false,
     double trafficMultiplier = 0.15,
+    int? nightMinFare,
+    int? nightMaxFare,
+    int? peakMinFare,
+    int? peakMaxFare,
   }) {
     final distance = DistanceCalculator.calculateDistance(
       pickupLat,
@@ -131,6 +127,10 @@ class TaxiFareCalculator {
       isNight: isNight,
       hasTraffic: hasTraffic,
       trafficMultiplier: trafficMultiplier,
+      nightMinFare: nightMinFare,
+      nightMaxFare: nightMaxFare,
+      peakMinFare: peakMinFare,
+      peakMaxFare: peakMaxFare,
     );
   }
 
@@ -143,18 +143,43 @@ class TaxiFareCalculator {
 
   /// تحديد إذا كان وقت الليل (بعد 8:30 مساءً أو قبل 6 صباحاً)
   static bool isNightTime() {
+    return isNightTimeFrom('20:30', '06:00');
+  }
+
+  /// تحديد إذا كان وقت الليل من إعدادات الأدمن (مثال: nightStart "20:30", nightEnd "06:00")
+  static bool isNightTimeFrom(String nightStart, String nightEnd) {
     final now = DateTime.now();
     final hour = now.hour;
     final minute = now.minute;
-    
-    // بعد الساعة 8:30 مساءً (20:30) أو قبل 6 صباحاً
-    if (hour < 6) {
-      return true; // قبل 6 صباحاً
+    final nowMinutes = hour * 60 + minute;
+    final (startHour, startMin) = _parseTime(nightStart);
+    final (endHour, endMin) = _parseTime(nightEnd);
+    final startMinutes = startHour * 60 + startMin;
+    final endMinutes = endHour * 60 + endMin;
+    if (startMinutes > endMinutes) {
+      return nowMinutes >= startMinutes || nowMinutes < endMinutes;
     }
-    if (hour > 20 || (hour == 20 && minute >= 30)) {
-      return true; // بعد 20:30 (8:30 مساءً)
-    }
-    return false;
+    return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+  }
+
+  /// تحديد إذا كان وقت الذروة من إعدادات الأدمن
+  static bool isPeakTimeFrom(String peakMorningStart, String peakMorningEnd, String peakEveningStart, String peakEveningEnd) {
+    final now = DateTime.now();
+    final nowMinutes = now.hour * 60 + now.minute;
+    final (mStartH, mStartM) = _parseTime(peakMorningStart);
+    final (mEndH, mEndM) = _parseTime(peakMorningEnd);
+    final (eStartH, eStartM) = _parseTime(peakEveningStart);
+    final (eEndH, eEndM) = _parseTime(peakEveningEnd);
+    final inMorning = nowMinutes >= mStartH * 60 + mStartM && nowMinutes < mEndH * 60 + mEndM;
+    final inEvening = nowMinutes >= eStartH * 60 + eStartM && nowMinutes < eEndH * 60 + eEndM;
+    return inMorning || inEvening;
+  }
+
+  static (int, int) _parseTime(String time) {
+    final parts = time.split(':');
+    final h = parts.isNotEmpty ? int.tryParse(parts[0].trim()) ?? 0 : 0;
+    final m = parts.length > 1 ? int.tryParse(parts[1].trim()) ?? 0 : 0;
+    return (h.clamp(0, 23), m.clamp(0, 59));
   }
 }
 

@@ -2,6 +2,7 @@ import '../models/order.dart';
 import '../core/api/api_service_improved.dart';
 import '../core/utils/app_logger.dart';
 import 'card_service.dart';
+import 'settings_service.dart';
 import 'package:dio/dio.dart';
 
 class OrderService {
@@ -190,10 +191,11 @@ class OrderService {
         
         AppLogger.d('Successfully parsed ${allOrders.length} orders');
         
-        // Backend يفلتر الطلبات المنتهية بالفعل، لكن نتحقق مرة أخرى للتأكد
-        // نستخدم buffer time (6 دقائق بدلاً من 5) لتجنب إزالة الطلبات الجديدة بسبب فارق التوقيت
+        // وقت انتهاء صلاحية الطلب من إعدادات الأدمن (orderExpirationMinutes)
+        final appSettings = await SettingsService().getAppSettings();
+        final expirationMinutes = appSettings.orderExpirationMinutes.clamp(1, 60);
+        final expirationTime = Duration(minutes: expirationMinutes);
         final now = DateTime.now();
-        const expirationTime = Duration(minutes: 6); // Buffer time للتأكد من عدم إزالة الطلبات الجديدة
         
         // فلترة الطلبات:
         // 1. التي لم يُقبل عليها سائق بعد

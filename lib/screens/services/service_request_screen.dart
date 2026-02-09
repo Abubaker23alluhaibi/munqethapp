@@ -13,6 +13,8 @@ import '../../widgets/location_picker_widget.dart';
 import '../../utils/constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/utils/distance_calculator.dart';
+import '../../services/settings_service.dart';
+import '../../models/app_settings.dart';
 
 class ServiceRequestScreen extends StatefulWidget {
   final String serviceType; // 'maintenance', 'car_emergency', 'fuel', 'maid', 'car_wash'
@@ -84,11 +86,29 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
   };
 
   bool _isLoading = false;
+  AppSettings? _appSettings;
 
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
+    _loadAppSettings();
+  }
+
+  Future<void> _loadAppSettings() async {
+    final settings = await SettingsService().getAppSettings();
+    if (mounted) setState(() => _appSettings = settings);
+  }
+
+  double _getMaxDistanceKm() {
+    if (_appSettings == null) return 15.0;
+    switch (widget.serviceType) {
+      case 'fuel': return _appSettings!.fuel.maxDistanceKm;
+      case 'car_emergency': return _appSettings!.carEmergency.maxDistanceKm;
+      case 'car_wash': return _appSettings!.carWash.maxDistanceKm;
+      case 'maid': return _appSettings!.maid.maxDistanceKm;
+      default: return _appSettings!.carEmergency.maxDistanceKm;
+    }
   }
 
   Future<void> _loadUserInfo() async {
@@ -132,7 +152,8 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
 
       if (nearestDriver != null) {
         final distance = nearestDriver.distanceTo(_customerLat!, _customerLng!) ?? 1.0;
-        final fare = calculateFuelPrice(_fuelQuantity, distance).toDouble();
+        final fromSettings = _appSettings?.fuel.getPriceFor(_fuelQuantity, distance);
+        final fare = (fromSettings ?? calculateFuelPrice(_fuelQuantity, distance)).toDouble();
         setState(() {
           _calculatedFare = fare;
         });
@@ -335,20 +356,18 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
           if (nearestDriver != null) {
             driverDistance = nearestDriver.distanceTo(_customerLat!, _customerLng!);
             
-            // Check if driver is within 15 km
-            if (driverDistance == null || driverDistance > 15.0) {
-              // Close loading dialog
+            final maxKm = _getMaxDistanceKm();
+            if (driverDistance == null || driverDistance > maxKm) {
               if (mounted) {
                 Navigator.of(context).pop();
               }
-              
               if (mounted) {
                 setState(() {
                   _isLoading = false;
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('لا يوجد ${_getServiceName()} متاح ضمن مسافة 15 كيلومتر. الرجاء المحاولة لاحقاً'),
+                    content: Text('لا يوجد ${_getServiceName()} متاح ضمن مسافة ${maxKm.toStringAsFixed(0)} كيلومتر. الرجاء المحاولة لاحقاً'),
                     backgroundColor: AppTheme.errorColor,
                     duration: const Duration(seconds: 4),
                   ),
@@ -390,20 +409,20 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
           Navigator.of(context).pop();
         }
 
-        // Calculate fare for fuel, car wash, or maid
+        // Calculate fare for fuel, car wash, or maid (من إعدادات الأدمن إن وُجدت)
         double? fare;
         if (widget.serviceType == 'fuel') {
-          // استخدام السعر المحسوب مسبقاً
           fare = _calculatedFare;
           if (fare == null && nearestDriver != null && _customerLat != null && _customerLng != null) {
             final distance = driverDistance ?? nearestDriver.distanceTo(_customerLat!, _customerLng!) ?? 1.0;
-            fare = calculateFuelPrice(_fuelQuantity, distance).toDouble();
+            final fromSettings = _appSettings?.fuel.getPriceFor(_fuelQuantity, distance);
+            fare = (fromSettings ?? calculateFuelPrice(_fuelQuantity, distance)).toDouble();
           }
         } else if (widget.serviceType == 'car_wash' && _carWashSize != null) {
-          fare = (_carWashSizes[_carWashSize]!['price'] as int).toDouble();
+          final fromSettings = _carWashSize == 'small' ? _appSettings?.carWash.smallPrice : _appSettings?.carWash.largePrice;
+          fare = (fromSettings ?? (_carWashSizes[_carWashSize]!['price'] as int)).toDouble();
         } else if (widget.serviceType == 'maid') {
-          // سعر ثابت للعاملة: 55000 دينار
-          fare = 55000.0;
+          fare = (_appSettings?.maid.defaultPrice ?? 55000).toDouble();
         }
 
         // Determine emergency reason
@@ -982,7 +1001,7 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${sizeData['price']} د.ع',
+                                      '${sizeKey == 'small' ? (_appSettings?.carWash.smallPrice ?? sizeData['price']) : (_appSettings?.carWash.largePrice ?? sizeData['price'])} د.ع',
                                       style: TextStyle(
                                         fontSize: 14,
                                         color: isSelected
@@ -1121,7 +1140,7 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
                           ),
                         ),
                         Text(
-                          '55000 د.ع',
+                          '${_appSettings?.maid.defaultPrice ?? 55000} د.ع',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,

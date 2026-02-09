@@ -8,6 +8,7 @@ import '../../services/driver_service.dart';
 import '../../services/order_service.dart';
 import '../../services/local_notification_service.dart';
 import '../../services/socket_service.dart';
+import '../../services/settings_service.dart';
 import '../../core/utils/app_logger.dart';
 
 class DriverOrdersScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
   Driver? _driver;
   List<Order> _availableOrders = [];
   bool _isLoading = true;
+  int _orderExpirationMinutes = 6; // من إعدادات الأدمن
   Map<String, DateTime> _orderTimers = {}; // لتتبع وقت ظهور الطلب
   Timer? _timer; // Timer لتحديث الوقت المتبقي كل ثانية
   ValueNotifier<int> _timerNotifier = ValueNotifier<int>(0); // لتحديث الـ UI كل ثانية
@@ -97,6 +99,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
 
     try {
       AppLogger.d('Loading driver orders data...');
+      final appSettings = await SettingsService().getAppSettings();
       final driver = await _driverService.getCurrentDriver();
       if (driver != null) {
         AppLogger.d('Driver found: ${driver.driverId}, serviceType: ${driver.serviceType}');
@@ -119,6 +122,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
         AppLogger.d('Displaying ${orders.length} orders to driver');
         if (mounted) {
           setState(() {
+            _orderExpirationMinutes = appSettings.orderExpirationMinutes.clamp(1, 60);
             _driver = driver;
             _availableOrders = orders;
             _isLoading = false;
@@ -239,8 +243,8 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
     final nowUtc = now.toUtc();
     final elapsed = nowUtc.difference(createdAtUtc);
     
-    // 6 دقائق = 360 ثانية (buffer time)
-    const totalTimeSeconds = 360;
+    // وقت انتهاء الطلب من إعدادات الأدمن (دقائق -> ثانية)
+    final totalTimeSeconds = (_orderExpirationMinutes.clamp(1, 60)) * 60;
     
     // إذا كان elapsed سالباً (الطلب في المستقبل بسبب timezone)، نستخدم 0
     // لكن يجب أن نحسب الوقت المتبقي بشكل صحيح

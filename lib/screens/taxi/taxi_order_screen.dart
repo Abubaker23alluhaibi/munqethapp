@@ -14,6 +14,8 @@ import '../../widgets/payment_method_selector.dart';
 import '../../core/utils/distance_calculator.dart';
 import '../../utils/taxi_fare_calculator.dart';
 import '../../services/card_service.dart';
+import '../../services/settings_service.dart';
+import '../../models/app_settings.dart';
 import '../../core/storage/secure_storage_service.dart';
 
 class TaxiOrderScreen extends StatefulWidget {
@@ -47,6 +49,8 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
   double? _destinationLat;
   double? _destinationLng;
 
+  AppSettings? _appSettings;
+
   // Payment
   PaymentMethod _paymentMethod = PaymentMethod.cash;
   String? _selectedCardId;
@@ -57,6 +61,12 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
   void initState() {
     super.initState();
     _loadUserInfo();
+    _loadAppSettings();
+  }
+
+  Future<void> _loadAppSettings() async {
+    final settings = await SettingsService().getAppSettings();
+    if (mounted) setState(() => _appSettings = settings);
   }
 
   Future<void> _loadUserInfo() async {
@@ -187,15 +197,22 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
           if (distance <= 0 || !distance.isFinite) {
             fare = 2000.0; // Default minimum fare
           } else {
-            // تحديد وقت الذروة والليل
-            final isPeak = TaxiFareCalculator.isPeakTime();
-            final isNight = TaxiFareCalculator.isNightTime();
-            
+            final taxi = _appSettings?.taxi;
+            final isPeak = taxi != null
+                ? TaxiFareCalculator.isPeakTimeFrom(taxi.peakMorningStart, taxi.peakMorningEnd, taxi.peakEveningStart, taxi.peakEveningEnd)
+                : TaxiFareCalculator.isPeakTime();
+            final isNight = taxi != null
+                ? TaxiFareCalculator.isNightTimeFrom(taxi.nightStart, taxi.nightEnd)
+                : TaxiFareCalculator.isNightTime();
             fare = TaxiFareCalculator.calculateFare(
               distance,
               isPeakTime: isPeak,
               isNight: isNight,
-              hasTraffic: false, // يمكن إضافة منطق للزحام لاحقاً
+              hasTraffic: false,
+              nightMinFare: taxi?.nightMinFare,
+              nightMaxFare: taxi?.nightMaxFare,
+              peakMinFare: taxi?.peakMinFare,
+              peakMaxFare: taxi?.peakMaxFare,
             ).toDouble();
           }
         }
@@ -234,25 +251,25 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
             return;
           }
           
-          // Check if nearest driver is within 3 km
+          final maxTaxiKm = _appSettings?.taxi.maxDistanceKm ?? 3.0;
           final nearestDistance = distances.isNotEmpty ? distances[0] : null;
-          if (nearestDistance == null || nearestDistance > 3.0) {
+          if (nearestDistance == null || nearestDistance > maxTaxiKm) {
             if (mounted) {
               setState(() {
                 _isLoading = false;
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('لا يوجد تكسي متاح ضمن مسافة 3 كيلومتر. الرجاء المحاولة لاحقاً'),
+                SnackBar(
+                  content: Text('لا يوجد تكسي متاح ضمن مسافة ${maxTaxiKm.toStringAsFixed(0)} كيلومتر. الرجاء المحاولة لاحقاً'),
                   backgroundColor: AppTheme.errorColor,
-                  duration: Duration(seconds: 4),
+                  duration: const Duration(seconds: 4),
                 ),
               );
             }
             return;
           }
           
-          // Driver found within 3km - continue to send request
+          // Driver found within maxTaxiKm - continue to send request
         } else {
           // For crane, check if there's a crane within 15 km
           if (mounted) {
@@ -275,25 +292,25 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
             return;
           }
           
-          // Check if nearest crane is within 15 km
-          final nearestDistance = distances.isNotEmpty ? distances[0] : null;
-          if (nearestDistance == null || nearestDistance > 15.0) {
+          final maxCraneKm = _appSettings?.crane.maxDistanceKm ?? 15.0;
+          final nearestDistanceCrane = distances.isNotEmpty ? distances[0] : null;
+          if (nearestDistanceCrane == null || nearestDistanceCrane > maxCraneKm) {
             if (mounted) {
               setState(() {
                 _isLoading = false;
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('لا يوجد كرين متاح ضمن مسافة 15 كيلومتر. الرجاء المحاولة لاحقاً'),
+                SnackBar(
+                  content: Text('لا يوجد كرين متاح ضمن مسافة ${maxCraneKm.toStringAsFixed(0)} كيلومتر. الرجاء المحاولة لاحقاً'),
                   backgroundColor: AppTheme.errorColor,
-                  duration: Duration(seconds: 4),
+                  duration: const Duration(seconds: 4),
                 ),
               );
             }
             return;
           }
           
-          // Crane found within 15km - continue to send request
+          // Crane found within maxCraneKm - continue to send request
         }
         
         // For display purposes, use the first driver
@@ -661,15 +678,22 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
                         );
                         
                         if (distance > 0 && distance.isFinite) {
-                            // تحديد وقت الذروة والليل
-                          final isPeak = TaxiFareCalculator.isPeakTime();
-                          final isNight = TaxiFareCalculator.isNightTime();
-                          
+                          final taxi = _appSettings?.taxi;
+                          final isPeak = taxi != null
+                              ? TaxiFareCalculator.isPeakTimeFrom(taxi.peakMorningStart, taxi.peakMorningEnd, taxi.peakEveningStart, taxi.peakEveningEnd)
+                              : TaxiFareCalculator.isPeakTime();
+                          final isNight = taxi != null
+                              ? TaxiFareCalculator.isNightTimeFrom(taxi.nightStart, taxi.nightEnd)
+                              : TaxiFareCalculator.isNightTime();
                           displayFare = TaxiFareCalculator.calculateFare(
                             distance,
                             isPeakTime: isPeak,
                             isNight: isNight,
                             hasTraffic: false,
+                            nightMinFare: taxi?.nightMinFare,
+                            nightMaxFare: taxi?.nightMaxFare,
+                            peakMinFare: taxi?.peakMinFare,
+                            peakMaxFare: taxi?.peakMaxFare,
                           ).toDouble();
                         } else {
                           displayFare = 0;
@@ -747,15 +771,22 @@ class _TaxiOrderScreenState extends State<TaxiOrderScreen> {
                         );
                         
                         if (distance > 0 && distance.isFinite) {
-                            // تحديد وقت الذروة والليل
-                          final isPeak = TaxiFareCalculator.isPeakTime();
-                          final isNight = TaxiFareCalculator.isNightTime();
-                          
+                          final taxi = _appSettings?.taxi;
+                          final isPeak = taxi != null
+                              ? TaxiFareCalculator.isPeakTimeFrom(taxi.peakMorningStart, taxi.peakMorningEnd, taxi.peakEveningStart, taxi.peakEveningEnd)
+                              : TaxiFareCalculator.isPeakTime();
+                          final isNight = taxi != null
+                              ? TaxiFareCalculator.isNightTimeFrom(taxi.nightStart, taxi.nightEnd)
+                              : TaxiFareCalculator.isNightTime();
                           displayFare = TaxiFareCalculator.calculateFare(
                             distance,
                             isPeakTime: isPeak,
                             isNight: isNight,
                             hasTraffic: false,
+                            nightMinFare: taxi?.nightMinFare,
+                            nightMaxFare: taxi?.nightMaxFare,
+                            peakMinFare: taxi?.peakMinFare,
+                            peakMaxFare: taxi?.peakMaxFare,
                           ).toDouble();
                         } else {
                           displayFare = 0;

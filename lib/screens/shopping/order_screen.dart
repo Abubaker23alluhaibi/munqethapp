@@ -20,6 +20,8 @@ import '../../services/card_service.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../utils/delivery_fee_calculator.dart';
 import '../../core/utils/distance_calculator.dart';
+import '../../services/settings_service.dart';
+import '../../models/app_settings.dart';
 
 class ShoppingOrderScreen extends StatefulWidget {
   const ShoppingOrderScreen({super.key});
@@ -54,12 +56,19 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
   // Delivery
   int? _deliveryFee;
   double? _distanceToSupermarket;
+  AppSettings? _appSettings;
 
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
     _loadProducts();
+    _loadAppSettings();
+  }
+
+  Future<void> _loadAppSettings() async {
+    final settings = await SettingsService().getAppSettings();
+    if (mounted) setState(() => _appSettings = settings);
   }
 
   Future<void> _loadUserInfo() async {
@@ -162,10 +171,13 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
         }
 
         if (mounted) {
+          final market = _appSettings?.market;
           setState(() {
             _distanceToSupermarket = distance;
-            _deliveryFee = distance != null 
-                ? DeliveryFeeCalculator.calculateDeliveryFee(distance)
+            _deliveryFee = distance != null
+                ? (market != null && market.deliveryFeeTiers.isNotEmpty
+                    ? DeliveryFeeCalculator.calculateDeliveryFeeWithTiers(distance, market.deliveryFeeTiers, market.deliveryFeePerKmOverMax)
+                    : DeliveryFeeCalculator.calculateDeliveryFee(distance))
                 : 1000;
             // التأكد من أن deliveryFee على الأقل 1000
             if (_deliveryFee != null && _deliveryFee! < 1000) {
@@ -326,16 +338,18 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
 
           if (calculatedDistance != null && calculatedDistance.isFinite) {
             _distanceToSupermarket = calculatedDistance;
-            _deliveryFee = DeliveryFeeCalculator.calculateDeliveryFee(_distanceToSupermarket!);
+            final market = _appSettings?.market;
+            _deliveryFee = market != null && market.deliveryFeeTiers.isNotEmpty
+                ? DeliveryFeeCalculator.calculateDeliveryFeeWithTiers(_distanceToSupermarket!, market.deliveryFeeTiers, market.deliveryFeePerKmOverMax)
+                : DeliveryFeeCalculator.calculateDeliveryFee(_distanceToSupermarket!);
           } else {
             _distanceToSupermarket = null;
             _deliveryFee = 1000; // Default minimum fee
           }
         }
         
-        // Check if supermarket is within 5 km
-        if (_distanceToSupermarket == null || _distanceToSupermarket! > 5.0) {
-          // Close loading dialog
+        final maxMarketKm = _appSettings?.market.maxDistanceKm ?? 5.0;
+        if (_distanceToSupermarket == null || _distanceToSupermarket! > maxMarketKm) {
           if (mounted) {
             Navigator.of(context).pop();
           }
@@ -346,7 +360,7 @@ class _ShoppingOrderScreenState extends State<ShoppingOrderScreen> {
             ErrorHandler.showErrorSnackBar(
               context,
               null,
-              customMessage: 'لا يوجد سوبر ماركت متاح ضمن مسافة 5 كيلومتر. الرجاء المحاولة لاحقاً',
+              customMessage: 'لا يوجد سوبر ماركت متاح ضمن مسافة ${maxMarketKm.toStringAsFixed(0)} كيلومتر. الرجاء المحاولة لاحقاً',
             );
           }
           return;
