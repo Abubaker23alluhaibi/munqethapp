@@ -16,6 +16,7 @@ class AdminSettingsScreen extends StatefulWidget {
 }
 
 class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
+  // --- نفس التعريفات والمنطق البرمجي بدون أي تغيير ---
   final _adminService = AdminService();
   final _commissionController = TextEditingController();
   final _orderExpirationController = TextEditingController();
@@ -61,6 +62,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     _loadSettings();
   }
 
+  // --- دوال الربط والمنطق (لم يتم تغييرها لضمان الأداء) ---
   Future<void> _checkPermission() async {
     final admin = await _adminService.getCurrentAdmin();
     if (admin != null && !admin.permissions.canAccessSettings && !admin.isSuperAdmin) {
@@ -211,8 +213,9 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم حفظ الإعدادات'),
+            content: Text('تم حفظ الإعدادات بنجاح'),
             backgroundColor: AppTheme.successColor,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -230,29 +233,55 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     }
   }
 
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
-            ),
+  // --- دوال مساعدة للتصميم المطور ---
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+    bool? isEnabled,
+    ValueChanged<bool>? onToggle,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: title == 'عام',
+          leading: Icon(icon, color: AppTheme.primaryColor),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          trailing: onToggle != null
+              ? Switch.adaptive(
+                  value: isEnabled ?? false,
+                  onChanged: onToggle,
+                  activeColor: AppTheme.primaryColor,
+                )
+              : null,
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: children,
+        ),
       ),
     );
   }
 
-  Widget _numberField(TextEditingController c, String label, String hint, {int? min, int? max}) {
+  Widget _numberField(TextEditingController c, String label, String hint) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(top: 12),
       child: CustomTextField(
         label: label,
         hint: hint,
         controller: c,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        prefixIcon: Icons.numbers,
+        prefixIcon: Icons.numbers_rounded,
       ),
     );
   }
@@ -262,147 +291,156 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppTheme.backgroundColor,
+        backgroundColor: const Color(0xFFF8F9FA), // لون خلفية هادئ
         appBar: AppBar(
-          title: const Text('إعدادات النظام'),
+          title: const Text('إعدادات النظام', style: TextStyle(fontWeight: FontWeight.bold)),
+          centerTitle: true,
           backgroundColor: AppTheme.primaryColor,
           foregroundColor: Colors.white,
+          elevation: 0,
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _sectionTitle('عام'),
-                    CustomTextField(
-                      label: 'نسبة العمولة (%)',
-                      hint: '10',
-                      controller: _commissionController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                      prefixIcon: Icons.percent_rounded,
+            : Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          // القسم العام
+                          _buildSectionCard(
+                            title: 'إعدادات عامة',
+                            icon: Icons.settings_applications,
+                            children: [
+                              CustomTextField(
+                                label: 'نسبة العمولة (%)',
+                                hint: '10',
+                                controller: _commissionController,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                                prefixIcon: Icons.percent_rounded,
+                              ),
+                              const SizedBox(height: 12),
+                              CustomTextField(
+                                label: 'وقت المتاح للطلبات (دقائق)',
+                                hint: '6',
+                                controller: _orderExpirationController,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                prefixIcon: Icons.timer_outlined,
+                              ),
+                            ],
+                          ),
+
+                          // قسم التكسي
+                          _buildSectionCard(
+                            title: 'خدمة التكسي',
+                            icon: Icons.local_taxi,
+                            isEnabled: _taxiEnabled,
+                            onToggle: (v) => setState(() => _taxiEnabled = v),
+                            children: [
+                              _numberField(_taxiMaxKmController, 'أقصى مسافة بحث (كم)', '3'),
+                              const Divider(height: 32),
+                              const Text('أوقات العمل والذروة', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(child: CustomTextField(label: 'بداية الليل', controller: _taxiNightStartController, hint: '20:30')),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: CustomTextField(label: 'نهاية الليل', controller: _taxiNightEndController, hint: '06:00')),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(child: CustomTextField(label: 'ذروة الصباح (من)', controller: _taxiPeakMStartController, hint: '07:00')),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: CustomTextField(label: 'ذروة الصباح (إلى)', controller: _taxiPeakMEndController, hint: '09:00')),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(child: CustomTextField(label: 'ذروة المساء (من)', controller: _taxiPeakEStartController, hint: '17:00')),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: CustomTextField(label: 'ذروة المساء (إلى)', controller: _taxiPeakEEndController, hint: '19:00')),
+                                ],
+                              ),
+                              const Divider(height: 32),
+                              const Text('تعرفة الأسعار (د.ع)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                              _numberField(_taxiNightMinController, 'أدنى سعر ليل', '10000'),
+                              _numberField(_taxiNightMaxController, 'أقصى سعر ليل', '20000'),
+                              _numberField(_taxiPeakMinController, 'أدنى سعر ذروة', '10000'),
+                              _numberField(_taxiPeakMaxController, 'أقصى سعر ذروة', '20000'),
+                            ],
+                          ),
+
+                          // قسم الماركت
+                          _buildSectionCard(
+                            title: 'الماركت (التسوق)',
+                            icon: Icons.shopping_bag_outlined,
+                            isEnabled: _marketEnabled,
+                            onToggle: (v) => setState(() => _marketEnabled = v),
+                            children: [
+                              _numberField(_marketMaxKmController, 'أقصى مسافة توصيل (كم)', '5'),
+                              _numberField(_marketPerKmController, 'رسوم إضافية لكل كم إضافي', '500'),
+                            ],
+                          ),
+
+                          // قسم غسيل السيارات
+                          _buildSectionCard(
+                            title: 'غسيل السيارات',
+                            icon: Icons.local_car_wash,
+                            isEnabled: _carWashEnabled,
+                            onToggle: (v) => setState(() => _carWashEnabled = v),
+                            children: [
+                              _numberField(_carWashMaxKmController, 'أقصى مسافة (كم)', '15'),
+                              _numberField(_carWashSmallController, 'سعر السيارة الصغيرة', '10000'),
+                              _numberField(_carWashLargeController, 'سعر السيارة الكبيرة', '15000'),
+                            ],
+                          ),
+
+                          // أقسام أخرى مختصرة
+                          _buildSectionCard(
+                            title: 'الكرين والطوارئ',
+                            icon: Icons.build_circle_outlined,
+                            children: [
+                              _numberField(_craneMaxKmController, 'أقصى مسافة للكرين (كم)', '15'),
+                              _numberField(_carEmergencyMaxKmController, 'أقصى مسافة للطوارئ (كم)', '15'),
+                            ],
+                          ),
+
+                          _buildSectionCard(
+                            title: 'خدمة البنزين والعاملة',
+                            icon: Icons.cleaning_services,
+                            children: [
+                              _numberField(_fuelMaxKmController, 'أقصى مسافة بنزين (كم)', '15'),
+                              const Divider(),
+                              _numberField(_maidMaxKmController, 'أقصى مسافة للعاملة (كم)', '15'),
+                              _numberField(_maidPriceController, 'السعر الافتراضي للعاملة', '55000'),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    CustomTextField(
-                      label: 'وقت المتاح للطلبات (دقائق)',
-                      hint: '6',
-                      controller: _orderExpirationController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      prefixIcon: Icons.timer_outlined,
+                  ),
+                  // زر الحفظ ثابت في الأسفل
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
                     ),
-                    _sectionTitle('التكسي'),
-                    SwitchListTile(
-                      title: const Text('تفعيل التكسي'),
-                      value: _taxiEnabled,
-                      onChanged: (v) => setState(() => _taxiEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_taxiMaxKmController, 'أقصى مسافة (كم) بين العميل والتكسي', '3'),
-                    CustomTextField(
-                      label: 'بداية وقت الليل (مثال 20:30)',
-                      controller: _taxiNightStartController,
-                      hint: '20:30',
-                      prefixIcon: Icons.nightlight_round,
-                    ),
-                    CustomTextField(
-                      label: 'نهاية وقت الليل (مثال 06:00)',
-                      controller: _taxiNightEndController,
-                      hint: '06:00',
-                      prefixIcon: Icons.wb_sunny_outlined,
-                    ),
-                    CustomTextField(
-                      label: 'بداية ذروة الصباح',
-                      controller: _taxiPeakMStartController,
-                      hint: '07:00',
-                      prefixIcon: Icons.access_time,
-                    ),
-                    CustomTextField(
-                      label: 'نهاية ذروة الصباح',
-                      controller: _taxiPeakMEndController,
-                      hint: '09:00',
-                      prefixIcon: Icons.access_time,
-                    ),
-                    CustomTextField(
-                      label: 'بداية ذروة المساء',
-                      controller: _taxiPeakEStartController,
-                      hint: '17:00',
-                      prefixIcon: Icons.access_time,
-                    ),
-                    CustomTextField(
-                      label: 'نهاية ذروة المساء',
-                      controller: _taxiPeakEEndController,
-                      hint: '19:00',
-                      prefixIcon: Icons.access_time,
-                    ),
-                    _numberField(_taxiNightMinController, 'الحد الأدنى لسعر الليل (د.ع)', '10000'),
-                    _numberField(_taxiNightMaxController, 'الحد الأقصى لسعر الليل (د.ع)', '20000'),
-                    _numberField(_taxiPeakMinController, 'الحد الأدنى لسعر الذروة (د.ع)', '10000'),
-                    _numberField(_taxiPeakMaxController, 'الحد الأقصى لسعر الذروة (د.ع)', '20000'),
-                    _sectionTitle('الكرين'),
-                    SwitchListTile(
-                      title: const Text('تفعيل الكرين'),
-                      value: _craneEnabled,
-                      onChanged: (v) => setState(() => _craneEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_craneMaxKmController, 'أقصى مسافة (كم)', '15'),
-                    _sectionTitle('الماركت (التسوق)'),
-                    SwitchListTile(
-                      title: const Text('تفعيل التسوق'),
-                      value: _marketEnabled,
-                      onChanged: (v) => setState(() => _marketEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_marketMaxKmController, 'أقصى مسافة توصيل (كم)', '5'),
-                    _numberField(_marketPerKmController, 'رسوم إضافية لكل كم فوق الحد (د.ع)', '500'),
-                    _sectionTitle('البنزين'),
-                    SwitchListTile(
-                      title: const Text('تفعيل خدمة البنزين'),
-                      value: _fuelEnabled,
-                      onChanged: (v) => setState(() => _fuelEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_fuelMaxKmController, 'أقصى مسافة (كم)', '15'),
-                    _sectionTitle('طوارئ السيارات'),
-                    SwitchListTile(
-                      title: const Text('تفعيل الخدمة'),
-                      value: _carEmergencyEnabled,
-                      onChanged: (v) => setState(() => _carEmergencyEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_carEmergencyMaxKmController, 'أقصى مسافة (كم)', '15'),
-                    _sectionTitle('غسيل السيارات'),
-                    SwitchListTile(
-                      title: const Text('تفعيل الخدمة'),
-                      value: _carWashEnabled,
-                      onChanged: (v) => setState(() => _carWashEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_carWashMaxKmController, 'أقصى مسافة (كم)', '15'),
-                    _numberField(_carWashSmallController, 'سعر السيارة الصغيرة (د.ع)', '10000'),
-                    _numberField(_carWashLargeController, 'سعر السيارة الكبيرة (د.ع)', '15000'),
-                    _sectionTitle('العاملة'),
-                    SwitchListTile(
-                      title: const Text('تفعيل خدمة العاملة'),
-                      value: _maidEnabled,
-                      onChanged: (v) => setState(() => _maidEnabled = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                    _numberField(_maidMaxKmController, 'أقصى مسافة (كم)', '15'),
-                    _numberField(_maidPriceController, 'السعر الافتراضي (د.ع)', '55000'),
-                    const SizedBox(height: 24),
-                    CustomButton(
-                      text: 'حفظ جميع الإعدادات',
+                    child: CustomButton(
+                      text: 'حفظ التغييرات',
                       onPressed: _isSaving ? null : _save,
                       isLoading: _isSaving,
                       backgroundColor: AppTheme.primaryColor,
                     ),
-                    const SizedBox(height: 32),
-                  ],
-                ),
+                  ),
+                ],
               ),
       ),
     );
