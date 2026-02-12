@@ -137,12 +137,20 @@ class _TaxiScreenState extends State<TaxiScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        desiredAccuracy: LocationAccuracy.best,
+        timeLimit: const Duration(seconds: 15),
       );
+      double lat = position.latitude;
+      double lng = position.longitude;
+      // تصحيح محتمل: إذا ظهرت الإحداثيات معكوسة (مثلاً تظهر تركيا بدل العراق)
+      // العراق تقريباً: خط عرض 29–38، خط طول 39–49
+      if (lat > 42 && lng < 40) {
+        lat = position.longitude;
+        lng = position.latitude;
+      }
       if (mounted) {
         setState(() {
-          _currentLocation = LatLng(position.latitude, position.longitude);
+          _currentLocation = LatLng(lat, lng);
           if (updatePickupLocation) {
             _pickupLocation = _currentLocation;
             _pickupSearchController.text = 'جاري الحصول على العنوان...';
@@ -499,14 +507,17 @@ class _TaxiScreenState extends State<TaxiScreen> {
         return;
       }
 
-      // Get fresh current position
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: LocationAccuracy.best,
         timeLimit: const Duration(seconds: 15),
       );
-
-      // Get the new location from GPS
-      final newLocation = LatLng(position.latitude, position.longitude);
+      double lat = position.latitude;
+      double lng = position.longitude;
+      if (lat > 42 && lng < 40) {
+        lat = position.longitude;
+        lng = position.latitude;
+      }
+      final newLocation = LatLng(lat, lng);
       
       if (mounted) {
         setState(() {
@@ -1027,16 +1038,17 @@ class _TaxiScreenState extends State<TaxiScreen> {
             else
               GoogleMap(
                 initialCameraPosition: CameraPosition(
-                  target: _pickupLocation!,
-                  zoom: 14,
+                  target: LatLng(_pickupLocation!.latitude, _pickupLocation!.longitude),
+                  zoom: 15,
                 ),
                 onMapCreated: (controller) async {
                   _mapController = controller;
-                  // تأكد من تحديث العلامات بعد إنشاء الخريطة
-                  await Future.delayed(const Duration(milliseconds: 300));
-                  if (mounted) {
+                  await Future.delayed(const Duration(milliseconds: 400));
+                  if (mounted && _pickupLocation != null) {
                     _updateMarkers();
-                    // تحميل السائقين إذا لم يتم تحميلهم بعد
+                    _mapController?.animateCamera(
+                      CameraUpdate.newLatLngZoom(_pickupLocation!, 15),
+                    );
                     if (_availableTaxiDrivers.isEmpty) {
                       await _loadAvailableTaxiDrivers();
                     }
@@ -1045,7 +1057,7 @@ class _TaxiScreenState extends State<TaxiScreen> {
                 onTap: _onMapTap,
                 markers: _markers,
                 polylines: _polylines,
-                myLocationButtonEnabled: false,
+                myLocationButtonEnabled: true,
                 myLocationEnabled: true,
                 zoomControlsEnabled: true,
                 mapType: MapType.normal,

@@ -46,13 +46,17 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
           widget.initialLongitude!,
         );
       } else {
-        // Get current location
         final position = await _getCurrentLocation();
         if (position != null) {
-          _selectedLocation = LatLng(position.latitude, position.longitude);
-          widget.onLocationSelected(position.latitude, position.longitude);
+          double lat = position.latitude;
+          double lng = position.longitude;
+          if (lat > 42 && lng < 40) {
+            lat = position.longitude;
+            lng = position.latitude;
+          }
+          _selectedLocation = LatLng(lat, lng);
+          widget.onLocationSelected(lat, lng);
         } else {
-          // Default to Baghdad if location not available
           _selectedLocation = const LatLng(33.3152, 44.3661);
           widget.onLocationSelected(33.3152, 44.3661);
         }
@@ -111,12 +115,17 @@ class _LocationPickerWidgetState extends State<LocationPickerWidget> {
     try {
       final position = await _getCurrentLocation();
       if (position != null) {
-        final location = LatLng(position.latitude, position.longitude);
+        double lat = position.latitude;
+        double lng = position.longitude;
+        if (lat > 42 && lng < 40) {
+          lat = position.longitude;
+          lng = position.latitude;
+        }
+        final location = LatLng(lat, lng);
         setState(() {
           _selectedLocation = location;
         });
-        widget.onLocationSelected(position.latitude, position.longitude);
-        
+        widget.onLocationSelected(lat, lng);
         if (_mapController != null) {
           await _mapController!.animateCamera(
             CameraUpdate.newLatLngZoom(location, 15),
